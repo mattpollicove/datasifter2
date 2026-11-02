@@ -2,7 +2,10 @@
 
 Contributions are welcome! DataSifter is **ALPHA / work in progress**. Read the
 [current progress and roadmap](./README.md#current-progress) before starting.
-For substantial changes, open an issue first to agree on scope and avoid duplicate work.
+Suggestions, comments, feature requests, and bug reports are welcome through
+[GitHub Issues](https://github.com/mattpollicove/datasifter2/issues); no code contribution
+or test plan is required to share feedback. For substantial changes, open an issue first
+to agree on scope and avoid duplicate work.
 
 ## Before pushing or requesting review
 

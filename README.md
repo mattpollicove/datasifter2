@@ -74,8 +74,12 @@ automatic model training, and a font picker are not current features.
 
 ## Contributions welcome
 
+Suggestions, comments, feature requests, and bug reports are welcome through
+[GitHub Issues](https://github.com/mattpollicove/datasifter2/issues).
+Feedback does not require a code contribution or test plan.
+
 Bug reports, reproducible parser examples, documentation fixes, and code contributions
-are welcome. **Every contribution must include a test plan, evidence of testing, and
+are welcome. **Code contributions must include a test plan, evidence of testing, and
 documentation updates where applicable before pushing or requesting review.**
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for the checklist, commands, and evidence format.
 
