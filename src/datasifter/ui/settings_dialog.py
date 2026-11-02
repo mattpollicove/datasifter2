@@ -39,6 +39,7 @@ class SettingsDialog(QDialog):
         lens_layout.addWidget(self.ai_enabled)
         explanation = QLabel(
             "Directory Lens translates descriptions into LDAP filters locally. "
+            "Only GGUF model files through llama.cpp are supported. "
             "Disabling it hides the workspace panel and releases the loaded model. "
             "Your approved model file is retained."
         )

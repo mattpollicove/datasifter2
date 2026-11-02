@@ -16,13 +16,49 @@ class FakeStoppingCriteriaList(list):
         return any(criterion(input_ids, logits) for criterion in self)
 
 
+@pytest.mark.parametrize(
+    ("filename", "content", "message"),
+    [
+        ("model.bin", b"GGUFplaceholder", r"Only local .gguf"),
+        ("model.safetensors", b"GGUFplaceholder", r"Only local .gguf"),
+        ("model.gguf", b"not a GGUF file", "invalid GGUF header"),
+        ("empty.gguf", b"", "invalid GGUF header"),
+        ("short.gguf", b"GG", "invalid GGUF header"),
+    ],
+)
+def test_non_gguf_models_are_rejected_before_hashing_or_loading(
+    tmp_path, monkeypatch, filename, content, message
+):
+    model_path = tmp_path / filename
+    model_path.write_bytes(content)
+
+    def fail_load(**_options):
+        raise AssertionError("Invalid models must not reach llama.cpp")
+
+    monkeypatch.setitem(sys.modules, "llama_cpp", fake_llama_cpp(fail_load))
+    with pytest.raises(LocalModelError, match=message):
+        model_sha256(model_path)
+    with pytest.raises(LocalModelError, match=message):
+        LlamaCppFilterGenerator(str(model_path), "a" * 64)
+
+
+def test_gguf_hash_covers_header_and_accepts_uppercase_extension(tmp_path):
+    import hashlib
+
+    model_path = tmp_path / "model.GGUF"
+    content = b"GGUFplaceholder"
+    model_path.write_bytes(content)
+
+    assert model_sha256(model_path) == hashlib.sha256(content).hexdigest()
+
+
 def fake_llama_cpp(llama):
     return SimpleNamespace(Llama=llama, StoppingCriteriaList=FakeStoppingCriteriaList)
 
 
 def test_local_model_prompt_contains_schema_but_not_row_values(tmp_path, monkeypatch):
     model_path = tmp_path / "model.gguf"
-    model_path.write_bytes(b"test model placeholder")
+    model_path.write_bytes(b"GGUFtest model placeholder")
     prompts = []
 
     class FakeLlama:
@@ -61,7 +97,7 @@ def test_local_model_prompt_contains_schema_but_not_row_values(tmp_path, monkeyp
 
 def test_model_hash_mismatch_is_rejected_before_loading_model(tmp_path):
     model_path = tmp_path / "model.gguf"
-    model_path.write_bytes(b"approved model")
+    model_path.write_bytes(b"GGUFapproved model")
 
     with pytest.raises(LocalModelError, match="changed after it was approved"):
         LlamaCppFilterGenerator(str(model_path), "0" * 64)
@@ -69,7 +105,7 @@ def test_model_hash_mismatch_is_rejected_before_loading_model(tmp_path):
 
 def test_local_generation_stops_when_cancelled(tmp_path, monkeypatch):
     model_path = tmp_path / "model.gguf"
-    model_path.write_bytes(b"test model")
+    model_path.write_bytes(b"GGUFtest model")
     cancelled = Event()
 
     class FakeLlama:
@@ -101,7 +137,7 @@ def test_local_generation_stops_when_cancelled(tmp_path, monkeypatch):
 def test_stopping_criteria_is_callable_for_installed_llama_cpp(tmp_path, monkeypatch):
     llama_cpp = pytest.importorskip("llama_cpp")
     model_path = tmp_path / "model.gguf"
-    model_path.write_bytes(b"test model")
+    model_path.write_bytes(b"GGUFtest model")
     cancelled = Event()
     checked = []
 
@@ -129,7 +165,7 @@ def test_stopping_criteria_is_callable_for_installed_llama_cpp(tmp_path, monkeyp
 
 def test_large_schema_is_trimmed_to_relevant_names_within_context(tmp_path, monkeypatch):
     model_path = tmp_path / "model.gguf"
-    model_path.write_bytes(b"test model")
+    model_path.write_bytes(b"GGUFtest model")
     prompts = []
 
     class FakeLlama:
@@ -212,7 +248,7 @@ LAB_ATTRIBUTES = ["cn", "sn", "mail", "uid", "telephoneNumber", "mobile", "facsi
 )
 def test_simple_requests_use_schema_names_without_the_model(tmp_path, monkeypatch, request_text, expected):
     model_path = tmp_path / "model.gguf"
-    model_path.write_bytes(b"test model")
+    model_path.write_bytes(b"GGUFtest model")
 
     class FakeLlama:
         def __init__(self, **_options):
@@ -240,7 +276,7 @@ def test_unsupported_phrasing_reaches_model_without_losing_conditions(
     tmp_path, monkeypatch, request_text
 ):
     model_path = tmp_path / "model.gguf"
-    model_path.write_bytes(b"test model")
+    model_path.write_bytes(b"GGUFtest model")
     prompts = []
 
     class FakeLlama:
@@ -268,7 +304,7 @@ def test_unsupported_phrasing_reaches_model_without_losing_conditions(
 )
 def test_model_aliases_are_mapped_to_schema_names(tmp_path, monkeypatch, model_output, expected):
     model_path = tmp_path / "model.gguf"
-    model_path.write_bytes(b"test model")
+    model_path.write_bytes(b"GGUFtest model")
 
     class FakeLlama:
         def __init__(self, **_options):
@@ -286,7 +322,7 @@ def test_model_aliases_are_mapped_to_schema_names(tmp_path, monkeypatch, model_o
 @pytest.mark.parametrize("model_output", ["(fax=316)(phone=316)", "(color=blue)"])
 def test_unusable_model_output_is_reported(tmp_path, monkeypatch, model_output):
     model_path = tmp_path / "model.gguf"
-    model_path.write_bytes(b"test model")
+    model_path.write_bytes(b"GGUFtest model")
 
     class FakeLlama:
         def __init__(self, **_options):
@@ -314,7 +350,7 @@ def test_unusable_model_output_is_reported(tmp_path, monkeypatch, model_output):
 )
 def test_attribute_value_requests_map_common_words(tmp_path, monkeypatch, request_text, expected):
     model_path = tmp_path / "model.gguf"
-    model_path.write_bytes(b"test model")
+    model_path.write_bytes(b"GGUFtest model")
 
     class FakeLlama:
         def __init__(self, **_options):
@@ -332,7 +368,7 @@ def test_attribute_value_requests_map_common_words(tmp_path, monkeypatch, reques
 
 def test_model_state_word_is_mapped_and_prompt_lists_aliases(tmp_path, monkeypatch):
     model_path = tmp_path / "model.gguf"
-    model_path.write_bytes(b"test model")
+    model_path.write_bytes(b"GGUFtest model")
     prompts = []
 
     class FakeLlama:

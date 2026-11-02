@@ -83,7 +83,7 @@ The central main window uses a multi-tab workspace:
 
 ### 5.1 Architecture & Non-Chinese Model Runtime
 * **100% Offline Inference:** Zero metadata or data row content is transmitted to external cloud APIs.
-* **Model Engine:** Integrates with local open-source, European/Western model runtimes (such as **Mistral / Codestral** via local runtimes like `llama.cpp` or Ollama).
+* **Model Engine:** Directory Lens supports local **GGUF files only**, using `llama.cpp` through `llama-cpp-python`. Model selection and loading require a `.gguf` extension and GGUF file header, plus the existing source approval and SHA-256 integrity checks. Ollama, remote inference services, and other model file formats are not supported.
 * **Context Scrubber Layer:** Middleware that strips sensitive data row values before prompting, providing the AI strictly with structural schema metadata (table DDL, column types, LDAP object classes).
 
 ### 5.2 Command Review, Validation & Confirmation Engine

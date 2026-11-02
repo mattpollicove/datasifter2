@@ -14,6 +14,13 @@ DataSifter is a local-first LDAP desktop client. This implementation targets Pha
 [`datasifter2.0_spec.md`](./datasifter2.0_spec.md): LDAP directory workspaces and an optional
 offline llama.cpp assistant.
 
+Directory Lens supports **local GGUF model files only**, loaded through
+`llama-cpp-python`. Selection and loading reject other extensions and files without a GGUF
+header, even if renamed to `.gguf`. A GGUF header alone does not establish model compatibility
+or authenticity; llama.cpp must support the model architecture, and source approval and
+SHA-256 verification still apply. Ollama, remote inference services, and other model formats
+are not supported.
+
 ## Requirements
 
 - Python 3.10 or newer

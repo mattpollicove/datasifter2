@@ -752,6 +752,29 @@ def test_model_changes_are_logged_only_after_successful_approval(qtbot, tmp_path
     window.close()
 
 
+@pytest.mark.parametrize(
+    ("filename", "content"),
+    [("model.bin", b"GGUFplaceholder"), ("renamed.gguf", b"invalid header")],
+)
+def test_model_approval_rejects_non_gguf_files(qtbot, tmp_path, monkeypatch, filename, content):
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    path = tmp_path / filename
+    path.write_bytes(content)
+    errors = []
+    monkeypatch.setattr(window, "_show_error", errors.append)
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *_args: pytest.fail("Invalid file must not be approved")
+    )
+    window._approve_model_file(str(path))
+    qtbot.waitUntil(lambda: not window._workers)
+    assert errors and "GGUF" in errors[0].upper()
+    assert not window.configuration.preferences.model_path
+    assert not window.ai_generate.isEnabled()
+    assert "Model changed:" not in window.ai_prompt_log.toPlainText()
+    window.close()
+
+
 def test_settings_and_generation_are_disabled_during_operations(qtbot, tmp_path, monkeypatch):
     from PyQt6.QtWidgets import QDialogButtonBox
 

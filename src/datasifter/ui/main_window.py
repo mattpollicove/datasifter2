@@ -987,6 +987,7 @@ class MainWindow(QMainWindow):
         preferences = self.configuration.preferences
         approved = bool(
             preferences.model_path and preferences.model_sha256 and preferences.model_provenance
+            and Path(preferences.model_path).suffix.casefold() == ".gguf"
         )
         reason = ""
         if not preferences.ai_enabled:
@@ -2435,7 +2436,7 @@ class MainWindow(QMainWindow):
             self,
             "Choose local GGUF model",
             self.configuration.preferences.model_path,
-            "GGUF model files (*.gguf);;All files (*)",
+            "GGUF model files (*.gguf)",
         )
         if not path:
             return
@@ -2591,6 +2592,10 @@ class MainWindow(QMainWindow):
         preferences = self.configuration.preferences
         if not preferences.model_path:
             self.model_status.setText("No local model selected.")
+        elif Path(preferences.model_path).suffix.casefold() != ".gguf":
+            self.model_status.setText(
+                "Unsupported model format. Select and approve a local .gguf model file."
+            )
         elif not preferences.model_sha256 or not preferences.model_provenance:
             self.model_status.setText(
                 "Model approval is incomplete. Reselect it and record its verified source."

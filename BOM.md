@@ -1,7 +1,7 @@
 # DataSifter bill of materials
 
 Application version: **0.005**
-Generated: 2026-11-02T13:12:13.569874+00:00
+Generated: 2026-11-02T13:15:10.250938+00:00
 
 Generated from the project manifest, installed distribution metadata, source files,
 and available packaged native binaries. Exact versions reflect this build environment.

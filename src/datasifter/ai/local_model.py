@@ -44,11 +44,16 @@ def model_sha256(
     progress: Callable[[int, str], None] | None = None,
 ) -> str:
     path = Path(model_path).expanduser()
+    if path.suffix.casefold() != ".gguf":
+        raise LocalModelError("Only local .gguf model files are supported.")
     try:
         size = path.stat().st_size
         digest = hashlib.sha256()
         processed = 0
         with path.open("rb") as model_file:
+            if model_file.read(4) != b"GGUF":
+                raise LocalModelError("The selected file is not a GGUF model (invalid GGUF header).")
+            model_file.seek(0)
             while chunk := model_file.read(1024 * 1024):
                 if cancelled and cancelled.is_set():
                     raise LocalModelError("Model verification cancelled.")
