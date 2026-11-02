@@ -130,10 +130,11 @@ Natural Language Input ──► AI Translation ──► Review & Confirmation 
 * Automated view recalculation/refresh triggers on base table modifications.
 * Planned Directory Lens expansion for Dialect SQL generation & cryptic database error diagnosis.
 
-### Phase 3: Data Synchronization Engine & SaaS Provisioning
-* Drag-and-drop LDAP $\leftrightarrow$ RDBMS attribute/column visual mapping interface.
-* Delta calculation engine & dry-run audit logger.
-* SaaS IDP target connectors (Okta, Microsoft Entra ID via Graph API) for outbound synchronization pipelines.
+### Phase 3: Provisioning
+* Field mapping interface for provisioning requests.
+* Explicit create, update, and deactivate actions with dry-run previews and audit logging.
+* Provisioning target integrations to be defined; no vendor-specific connectors are committed.
+* Scope is provisioning only, not a general-purpose or bidirectional data synchronization engine.
 
 ---
 

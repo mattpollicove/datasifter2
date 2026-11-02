@@ -67,7 +67,7 @@ The ordering below describes direction, not release dates or a guarantee of deli
 | --- | --- | --- |
 | Phase 1: LDAP alpha stabilization | Implemented; validation and refinement ongoing | Live LDAP/TLS interoperability matrix, real-model accuracy/performance evaluation, parser regression cases, usability/accessibility refinements, fresh standalone builds and clean-target checks |
 | Phase 2: RDBMS expansion | Planned; not implemented | Database drivers and explorer, editable data grids, SQL console, refresh behavior, local SQL assistance |
-| Phase 3: Synchronization and provisioning | Planned; not implemented | LDAP/RDBMS mappings, delta calculation and dry-run audit, Okta and Microsoft Entra ID connectors |
+| Phase 3: Provisioning | Planned; not implemented | Provisioning field mappings, explicit create/update/deactivate actions, dry-run previews and audit logs; target integrations to be defined |
 
 AI support remains local GGUF through llama.cpp. Remote inference, Ollama integration,
 automatic model training, and a font picker are not current features.

@@ -19,6 +19,9 @@ At planning time, the starting folder had no application code, test suite, or pr
 - Passwords: OS-native keyring only; never included in profile JSON.
 - Validation: offline unit tests and static checks first; live LDAP behavior requires a user-provided directory and is not simulated as a successful connection.
 - No RDBMS, SaaS connectors, or synchronization engine in this implementation.
+- Product roadmap Phase 3 is provisioning only, with target integrations to be defined;
+  vendor-specific connectors and a general-purpose synchronization engine are not committed.
+  The numbered phases below are implementation steps within the original Phase 1 plan.
 
 ## Implementation Steps and Tasks
 
