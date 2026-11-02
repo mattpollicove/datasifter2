@@ -55,7 +55,7 @@ The central main window uses a multi-tab workspace:
 * **SQL Console / Filter Bar:** Dialect-aware SQL execution editor and LDAP raw filter engine with syntax highlighting.
 * **Schema Inspector:** Side-by-side view of directory object classes/syntaxes vs. RDBMS DDL schemas, primary/foreign keys, and data types.
 * **Protocol & SQL Log Console:** Live stream of outbound LDAP packets (`ldap3` dictionaries) and executed raw SQL statements with execution timing metrics.
-* **Local AI Copilot Dock:** Interactive assistant sidebar.
+* **Directory Lens:** Interactive local assistant sidebar.
 
 ---
 
@@ -79,11 +79,12 @@ The central main window uses a multi-tab workspace:
 
 ---
 
-## 5. Privacy-First Local AI Copilot & Command Execution Safety Flow
+## 5. Privacy-First Directory Lens & Command Execution Safety Flow
 
 ### 5.1 Architecture & Non-Chinese Model Runtime
 * **100% Offline Inference:** Zero metadata or data row content is transmitted to external cloud APIs.
 * **Model Engine:** Directory Lens supports local **GGUF files only**, using `llama.cpp` through `llama-cpp-python`. Model selection and loading require a `.gguf` extension and GGUF file header, plus the existing source approval and SHA-256 integrity checks. Ollama, remote inference services, and other model file formats are not supported.
+* **Current model catalog (2026-11-02):** SmolLM2 1.7B Instruct Q4_K_M; Google Gemma 3 1B and 4B Instruct Q4_K_M; Meta Llama 3.2 1B and 3B Instruct Q4_K_M; Meta Llama 3.1 8B Instruct Q4_0; Phi-3 Mini 4K Instruct Q4; Microsoft Phi-4 14B Q4_K_S. See the [README model list](./README.md#choosing-a-model) for selection guidance and [source catalog](./src/datasifter/ai/model_catalog.py) for exact pinned artifacts. Other compatible GGUF files can be selected locally; inclusion is not real-model certification.
 * **Context Scrubber Layer:** Middleware that strips sensitive data row values before prompting, providing the AI strictly with structural schema metadata (table DDL, column types, LDAP object classes).
 
 ### 5.2 Command Review, Validation & Confirmation Engine
@@ -114,12 +115,12 @@ Natural Language Input ──► AI Translation ──► Review & Confirmation 
 
 ## 6. Phased Development Roadmap
 
-### Phase 1: LDAP Core + Local AI Copilot (Immediate Target)
+### Phase 1: LDAP Core + Directory Lens (Alpha Implementation)
 * Complete PyQt6 desktop application shell (`DataSifter 2.0`).
 * Keyring vault integration & local configuration store.
 * `ldap3` async connection management and DIT tree virtualization.
 * Advanced transport security (TLS, mTLS, custom CAs, persistent TOFU certificate validation).
-* Local European AI Copilot runtime (Mistral/Codestral) for Natural Language $\rightarrow$ RFC 4515 LDAP Filters.
+* Directory Lens local GGUF inference through llama.cpp for Natural Language $\rightarrow$ RFC 4515 LDAP Filters, using the current catalog or an approved compatible local GGUF file.
 * Command Review Modal with pre-flight syntax validation and optional confirmation toggle.
 
 ### Phase 2: RDBMS Expansion
@@ -127,7 +128,7 @@ Natural Language Input ──► AI Translation ──► Review & Confirmation 
 * Database Explorer tree view and interactive `QTableView` data grid.
 * SQL Console (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `DDL`).
 * Automated view recalculation/refresh triggers on base table modifications.
-* AI Copilot expansion for Dialect SQL generation & cryptic database error diagnosis.
+* Planned Directory Lens expansion for Dialect SQL generation & cryptic database error diagnosis.
 
 ### Phase 3: Data Synchronization Engine & SaaS Provisioning
 * Drag-and-drop LDAP $\leftrightarrow$ RDBMS attribute/column visual mapping interface.

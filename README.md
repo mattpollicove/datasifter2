@@ -137,19 +137,40 @@ match (`(ou:dn:=People)`), which is added automatically if the model omits it.
 
 **Download / select models** in application settings (also available under
 **Settings → Directory Lens**) opens a curated model manager. Each entry shows a
-short description, and the drop-down tooltip repeats it. All files are pinned to an exact
+short description, and the drop-down tooltip repeats it. The list below reflects the
+**eight models in the application catalog as of 2026-11-02**, not a list of all compatible
+GGUF models. All catalog files are pinned to an exact
 revision, size, and SHA-256:
 
 | Model | Publisher / license | GGUF quantized by | Size |
 | --- | --- | --- | --- |
-| SmolLM2 1.7B Instruct Q4_K_M | Hugging Face, Apache-2.0 | Hugging Face | 0.98 GiB |
-| Gemma 3 1B Instruct Q4_K_M | Google, Gemma Terms of Use | ggml-org | 0.75 GiB |
-| Gemma 3 4B Instruct Q4_K_M | Google, Gemma Terms of Use | ggml-org | 2.32 GiB |
-| Llama 3.2 1B Instruct Q4_K_M | Meta, Llama 3.2 Community License | hugging-quants | 0.75 GiB |
-| Llama 3.2 3B Instruct Q4_K_M | Meta, Llama 3.2 Community License | hugging-quants | 1.88 GiB |
-| Llama 3.1 8B Instruct Q4_0 | Meta, Llama 3.1 Community License | ggml-org | 5.62 GiB |
-| Phi-3 Mini 4K Instruct Q4 | Microsoft, MIT | Microsoft | 2.23 GiB |
-| Phi-4 14B Q4_K_S | Microsoft, MIT | Microsoft | 7.86 GiB |
+| [SmolLM2 1.7B Instruct Q4_K_M](https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct) | Hugging Face, Apache-2.0 | Hugging Face | 0.98 GiB |
+| [Google Gemma 3 1B Instruct Q4_K_M](https://huggingface.co/google/gemma-3-1b-it) | Google, Gemma Terms of Use | ggml-org | 0.75 GiB |
+| [Google Gemma 3 4B Instruct Q4_K_M](https://huggingface.co/google/gemma-3-4b-it) | Google, Gemma Terms of Use | ggml-org | 2.32 GiB |
+| [Meta Llama 3.2 1B Instruct Q4_K_M](https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct) | Meta, Llama 3.2 Community License | hugging-quants | 0.75 GiB |
+| [Meta Llama 3.2 3B Instruct Q4_K_M](https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct) | Meta, Llama 3.2 Community License | hugging-quants | 1.88 GiB |
+| [Meta Llama 3.1 8B Instruct Q4_0](https://huggingface.co/meta-llama/Meta-Llama-3.1-8B-Instruct) | Meta, Llama 3.1 Community License | ggml-org | 5.62 GiB |
+| [Phi-3 Mini 4K Instruct Q4](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct) | Microsoft, MIT | Microsoft | 2.23 GiB |
+| [Microsoft Phi-4 14B Q4_K_S](https://huggingface.co/microsoft/phi-4) | Microsoft, MIT | Microsoft | 7.86 GiB |
+
+### Choosing a model
+
+- **Lower memory use:** try SmolLM2 1.7B or a 1B model for simple requests.
+- **Middle ground:** try Gemma 3 4B, Llama 3.2 3B, or Phi-3 Mini.
+- **More capacity:** try Llama 3.1 8B or Phi-4 14B if memory and response time permit.
+  The catalog estimates roughly 8 GB and 10 GB of free RAM respectively; actual requirements
+  depend on the runtime, context, and hardware. Download size is not total RAM usage.
+
+These are starting points, not measured LDAP-accuracy rankings. Real-model evaluation is
+still on the roadmap. Directory Lens currently uses a **4,096-token context** regardless
+of a model's advertised maximum. Simple requests may bypass inference through the parser;
+a larger model will not fix a deterministic parser bug. Keep filter review enabled.
+Other compatible GGUF files can be selected locally, subject to the same approval and
+integrity checks. Models are not trained or fine-tuned by the application.
+
+The [source catalog](./src/datasifter/ai/model_catalog.py) is the source of truth for
+filenames, revisions, sizes, hashes, publisher information, and download repositories.
+Catalog inclusion is not a guarantee of inference compatibility or quality.
 
 Google's own GGUF repositories require a Hugging Face login, and Meta does not publish GGUF files.
 For those models, the catalog uses ungated quantizations from the llama.cpp maintainers (ggml-org)
