@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datasifter"
+dynamic = ["version"]
+description = "Local-first LDAP desktop client"
+license = {file = "LICENSE"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6>=6.6",
+    "ldap3>=2.9.1",
+    "keyring>=24.3",
+    "cryptography>=41",
+]
+
+[project.optional-dependencies]
+local-ai = ["llama-cpp-python>=0.2.90"]
+packaging = ["pyinstaller>=6.0"]
+dev = ["pytest>=8.0", "pytest-qt>=4.4", "ruff>=0.6"]
+bom = [
+    "packaging>=24",
+    "cyclonedx-python-lib[json-validation]>=11",
+    "wheel>=0.48",
+    "tomli>=2; python_version < '3.11'",
+]
+
+[project.scripts]
+datasifter = "datasifter.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "datasifter.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

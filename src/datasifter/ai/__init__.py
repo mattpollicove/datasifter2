@@ -1,0 +1,1 @@
+"""Offline local AI integrations."""
