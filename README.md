@@ -21,6 +21,64 @@ or authenticity; llama.cpp must support the model architecture, and source appro
 SHA-256 verification still apply. Ollama, remote inference services, and other model formats
 are not supported.
 
+## Current progress
+
+Status as of **2026-11-02**: **Phase 1 LDAP functionality is implemented and under
+active alpha testing**. This is not a production-readiness or interoperability certification.
+The [implementation plan](./plan.md) records the original Phase 1 work; the
+[specification](./datasifter2.0_spec.md) describes the broader vision, not a list of
+features all available today.
+
+### What's working in the current implementation
+
+| Area | Implemented capabilities |
+| --- | --- |
+| Profiles and credentials | Create/edit profiles, network and authentication checks, local JSON preferences, OS keyring integration, read-only profiles |
+| Directory workspace | Paged DIT browsing, LDAP filter searches, attribute editing, schema-guided entry creation, delete, rename/move, password modification |
+| Transport and safety | Plain LDAP warnings, StartTLS/LDAPS, custom CA/client certificates, TOFU approval and rotation checks, write confirmations |
+| Schema inspector | Object-class filtering with inherited attributes and progressive attribute-name search |
+| Directory Lens | Local GGUF selection/download/approval, integrity checks, model reuse, streamed filter generation, deterministic simple searches, filter review, model-change logging |
+| Usability | Grouped settings, persistent AI enable/disable, Enter-to-generate, operational-attribute italics, search highlighting, cancellation and sanitized protocol logs |
+| Packaging | Windows standalone build workflow, version increments, generated bill of materials |
+
+These features have offline automated coverage; availability in the implementation does
+not mean every operation has been verified against a live server or every listed model.
+
+### Testing evidence and current limitations
+
+- Most recent source validation: **219 tests passed** on Windows on 2026-11-02,
+  plus Ruff checks for the GGUF-only change and a Python syntax check for its inference adapter.
+- Automated coverage includes configuration, LDAP service behavior, filters, certificates,
+  workers, Qt UI interactions, model approval/download safeguards, and BOM generation.
+  Model inference tests use fakes where appropriate; passing them is not a real-model benchmark.
+- Live LDAP-server interoperability, end-to-end TLS/client-certificate behavior on clean
+  machines, and real-GGUF accuracy/performance still require environment-specific testing.
+- The previous Windows standalone build predates recent source changes. The current source
+  has not been repackaged or revalidated as a standalone release; macOS/Linux builds are
+  not certified.
+- Natural-language interpretation can be wrong. Review generated filters; complex requests
+  may require rephrasing or a manually written LDAP filter.
+
+## Roadmap
+
+The ordering below describes direction, not release dates or a guarantee of delivery.
+
+| Stage | Status | Next work |
+| --- | --- | --- |
+| Phase 1: LDAP alpha stabilization | Implemented; validation and refinement ongoing | Live LDAP/TLS interoperability matrix, real-model accuracy/performance evaluation, parser regression cases, usability/accessibility refinements, fresh standalone builds and clean-target checks |
+| Phase 2: RDBMS expansion | Planned; not implemented | Database drivers and explorer, editable data grids, SQL console, refresh behavior, local SQL assistance |
+| Phase 3: Synchronization and provisioning | Planned; not implemented | LDAP/RDBMS mappings, delta calculation and dry-run audit, Okta and Microsoft Entra ID connectors |
+
+AI support remains local GGUF through llama.cpp. Remote inference, Ollama integration,
+automatic model training, and a font picker are not current features.
+
+## Contributions welcome
+
+Bug reports, reproducible parser examples, documentation fixes, and code contributions
+are welcome. **Every contribution must include a test plan, evidence of testing, and
+documentation updates where applicable before pushing or requesting review.**
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the checklist, commands, and evidence format.
+
 ## Requirements
 
 - Python 3.10 or newer

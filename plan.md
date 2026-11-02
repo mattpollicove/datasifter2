@@ -2,9 +2,14 @@
 
 ## Summary
 
+**Status note (2026-11-02):** This is the original implementation plan, not a release
+certification. Phase 1 code is implemented and remains ALPHA / work in progress.
+See [README.md](./README.md#current-progress) for current capabilities, validation evidence,
+limitations, and the roadmap; see [CONTRIBUTING.md](./CONTRIBUTING.md) before submitting work.
+
 Build the Phase 1 native desktop application described in `datasifter2.0_spec.md`: a PyQt6 LDAP client with local JSON profile metadata, OS keyring password storage, isolated asynchronous LDAP operations, TLS options, a DIT workspace, guarded directory mutations, and an offline llama.cpp-based natural-language-to-filter workflow with command review. Phases 2 and 3 are excluded.
 
-The starting folder has no application code, test suite, or project constitution. The specification has section references but no `REQ-XXX` IDs; this plan uses the existing section numbers as requirement references rather than inventing IDs or behavior.
+At planning time, the starting folder had no application code, test suite, or project constitution. The specification has section references but no `REQ-XXX` IDs; this plan uses the existing section numbers as requirement references rather than inventing IDs or behavior.
 
 ## Decisions
 
@@ -83,7 +88,11 @@ src/
 tests/
 ```
 
-## Completion
+## Implementation history
+
+The counts and build results below are historical milestones. Current source validation
+on 2026-11-02 passed **219 tests**; recent source changes are not yet validated in a fresh
+standalone build. Completed tasks mean implemented code, not production readiness.
 
 All 16 planned tasks are implemented. The Phase 1 follow-up adds active LDAP socket interruption across LDAP operations, sanitized decoded ldap3 request-dictionary logging where available (with summaries as a fallback), an LDAP filter syntax highlighter, a schema inspector with attribute syntax details, and streamed/cancellable local inference. Model selection records an operator-attested source and SHA-256 digest; inference refuses unapproved or changed model files. The standalone build at version 0.005 and its UI startup smoke test passed before the latest cancellation and logging follow-up. Latest validation passed 92 tests, Ruff, `compileall`, and `pip check`; the BOM generator validated and regenerated 204 components. External LDAP-server interoperability, clean-target TLS, real-model behavior, and macOS/Linux builds remain environment-dependent.
 
