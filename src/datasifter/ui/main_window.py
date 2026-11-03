@@ -4,63 +4,51 @@ from __future__ import annotations
 
 import logging
 import tempfile
-from collections.abc import Callable
-from dataclasses import replace
-from datetime import datetime
-from pathlib import Path
-from threading import Event, Lock
-from typing import Any
-from uuid import uuid4
-
-from PyQt6.QtCore import (
-    QAbstractItemModel,
-    QEvent,
-    QModelIndex,
-    QObject,
-    QRegularExpression,
-    QSignalBlocker,
-    Qt,
-    QThreadPool,
-    pyqtSignal,
-)
-from PyQt6.QtGui import (
-    QBrush,
-    QColor,
-    QGuiApplication,
-    QKeyEvent,
-    QSyntaxHighlighter,
-    QTextCharFormat,
-    QTextCursor,
-)
-from PyQt6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QCompleter,
-    QDialog,
-    QDialogButtonBox,
-    QFileDialog,
-    QFormLayout,
-    QHBoxLayout,
-    QInputDialog,
-    QLabel,
-    QLineEdit,
-    QMainWindow,
-    QMessageBox,
-    QPlainTextEdit,
-    QProgressBar,
-    QPushButton,
-    QSplitter,
-    QStyledItemDelegate,
-    QStyleOptionViewItem,
-    QTableWidget,
-    QTableWidgetItem,
-    QTabWidget,
-    QTextEdit,
-    QTreeWidget,
-    QTreeWidgetItem,
-    QVBoxLayout,
-    QWidget,
-)
+15 | from PyQt6.QtCore import (
+16 |     QAbstractItemModel,
+17 |     QEvent,
+18 |     QModelIndex,
+19 |     QObject,
+20 |     QRegularExpression,
+21 |     QSignalBlocker,
+22 |     Qt,
+23 |     QThreadPool,
+24 |     pyqtSignal,
+25 |     QPoint,
+26 | )
+27 | from PyQt6.QtGui import (
+28 |     QBrush,
+29 |     QColor,
+30 |     QGuiApplication,
+31 |     QKeyEvent,
+32 |     QSyntaxHighlighter,
+33 |     QTextCharFormat,
+34 |     QTextCursor,
+35 | )
+36 | from PyQt6.QtWidgets import (
+37 |     QCheckBox,
+38 |     QComboBox,
+39 |     QCompleter,
+40 |     QDialog,
+41 |     QDialogButtonBox,
+42 |     QFileDialog,
+43 |     QFormLayout,
+44 |     QHBoxLayout,
+45 |     QInputDialog,
+46 |     QLabel,
+47 |     QLineEdit,
+48 |     QMainWindow,
+49 |     QMessageBox,
+50 |     QPlainTextEdit,
+51 |     QProgressBar,
+52 |     QPushButton,
+53 |     QSplitter,
+54 |     QStyledItemDelegate,
+55 |     QStyleOptionViewItem,
+56 |     QTableWidget,
+57 |     QTableWidgetItem,
+58 |     QTabWidget,
+56 | 
 
 from datasifter import __version__
 from datasifter.ai.local_model import LlamaCppFilterGenerator, model_sha256
@@ -77,7 +65,8 @@ from datasifter.directory.filters import (
     validate_filter,
 )
 from datasifter.directory.service import LDAPService
-from datasifter.directory.worker import DirectoryWorker
+from datasifter.ui.directory_lens_tab import DirectoryLensTab
+from datasifter.directory.service import LDAPService
 from datasifter.security.certificates import (
     CertificateTrustError,
     CertificateTrustStore,
@@ -266,12 +255,14 @@ class ProfileDialog(QDialog):
         layout.addRow("Authentication", self.authentication_mode)
         layout.addRow("Bind DN (required for simple bind)", self.bind_dn)
         layout.addRow("Bind password", self.password)
-        layout.addRow(self.test_authentication_button)
+        # The test authentication button should appear after the password options
+        # (Show password / Save password).  Move it below the password options row.
         password_options = QHBoxLayout()
         password_options.addWidget(self.show_password)
         password_options.addWidget(self.save_password)
         password_options.addStretch()
         layout.addRow(password_options)
+        layout.addRow(self.test_authentication_button)
         layout.addRow("Base DN", self.base_dn)
         layout.addRow("Custom CA certificate", self.ca_certificate)
         layout.addRow("Client certificate", self.client_certificate)
@@ -719,6 +710,9 @@ class MainWindow(QMainWindow):
         self.attributes.horizontalHeader().sectionResized.connect(
             lambda *_args: self.attributes.resizeRowsToContents()
         )
+        # Enable custom context menu for attribute values
+        self.attributes.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.attributes.customContextMenuRequested.connect(self._attributes_context_menu)
         self.dn_field = QLineEdit()
         self.dn_field.setReadOnly(True)
         self.dn_field.setPlaceholderText("Select an entry to show its distinguished name")
@@ -870,6 +864,24 @@ class MainWindow(QMainWindow):
         tabs.addTab(schema_panel, "Schema inspector")
         tabs.addTab(self.log_output, "Protocol log")
         tabs.addTab(prompts_panel, "Directory Lens log")
+        # Add a dedicated tab for the DirectoryLens widget.  The widget is
+        # instantiated with a dummy LDAPService that uses the current profile
+        # (if any).  The service is passed to the widget so that CRUD
+        # operations can be exercised from the UI.
+        if self.profile:
+            service = LDAPService(self.profile, None)
+        else:
+            # Create a minimal profile for the tab when no profile is set.
+            from datasifter.config import DirectoryProfile
+            dummy_profile = DirectoryProfile(
+                name="demo", host="ldap.test", port=389, transport="plain",
+                authentication_mode="anonymous", bind_dn="", base_dn="dc=example,dc=com",
+                ca_certificate="", client_certificate="", client_key="", read_only=False,
+                profile_id="demo"
+            )
+            service = LDAPService(dummy_profile, None)
+        self.directory_lens_tab = DirectoryLensTab(service)
+        tabs.addTab(self.directory_lens_tab, "Directory Lens")
         self.tabs = tabs
         self.setCentralWidget(tabs)
         self.statusBar().showMessage("No directory connected")
@@ -1742,6 +1754,35 @@ class MainWindow(QMainWindow):
         self._apply_search_highlight()
         self.attributes.resizeRowsToContents()
         self._update_save_enabled()
+
+    # ---------------------------------------------------------------------
+    # Context menu for attribute values
+    # ---------------------------------------------------------------------
+    def _attributes_context_menu(self, pos: QPoint) -> None:
+        """Show a context menu for the attribute values table.
+
+        The menu provides standard copy/cut/paste/select‑all actions.  The
+        actions operate on the current selection of the table.  If the user
+        right‑clicks on an empty area, no menu is shown.
+        """
+        item = self.attributes.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self)
+        copy_action = menu.addAction("Copy")
+        paste_action = menu.addAction("Paste")
+        cut_action = menu.addAction("Cut")
+        menu.addSeparator()
+        select_all_action = menu.addAction("Select All")
+        action = menu.exec(self.attributes.mapToGlobal(pos))
+        if action == copy_action:
+            self.attributes.copy()
+        elif action == paste_action:
+            self.attributes.paste()
+        elif action == cut_action:
+            self.attributes.cut()
+        elif action == select_all_action:
+            self.attributes.selectAll()
 
     def _apply_search_highlight(self) -> None:
         enabled = self.configuration.preferences.highlight_search_attributes

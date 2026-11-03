@@ -1089,7 +1089,9 @@ def test_profile_test_buttons_follow_their_input_fields(qtbot):
     password_row, _ = layout.getWidgetPosition(dialog.password)
     authentication_row, _ = layout.getWidgetPosition(dialog.test_authentication_button)
     assert connection_row == port_row + 1
-    assert authentication_row == password_row + 1
+    # The test authentication button should now appear after the password options row.
+    # That places it two rows below the password field.
+    assert authentication_row == password_row + 2
     assert dialog.transport.currentData() == "plain"
     assert not dialog.plain_warning.isHidden()
     dialog.transport.setCurrentIndex(1)

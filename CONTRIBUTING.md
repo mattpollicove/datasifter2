@@ -36,11 +36,12 @@ the declared extras for your work:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev,bom]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,bom,packaging]"
 ```
 
 Real-model testing additionally requires the `local-ai` extra and an independently
-approved, compatible GGUF file; standalone packaging requires the `packaging` extra.
+approved, compatible GGUF file. The full test suite imports PyInstaller in its BOM
+packaging test, so the `packaging` extra is included in the development install above.
 See the [setup and model instructions](./README.md#install-and-run).
 
 Run focused tests during development, then the suite before submitting code:
