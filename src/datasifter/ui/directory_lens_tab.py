@@ -19,19 +19,19 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List
 
+from PyQt6.QtGui import QShowEvent
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
+    QLabel,
+    QLineEdit,
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
-    QLabel,
-    QLineEdit,
-)
-    QWidget,
 )
 
+from datasifter.diagnostics import log_exception
 from datasifter.directory.service import LDAPService
 from datasifter.ui.directory_lens import DirectoryLens
 
@@ -45,13 +45,13 @@ class DirectoryLensTab(QWidget):
         The :class:`LDAPService` instance used by the lens.
     """
 
-    def __init__(self, service: LDAPService, parent: QWidget | None = None) -> None:
+    def __init__(self, service: LDAPService | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.lens = DirectoryLens(service)
+        self._service: LDAPService | None = None
+        self._lens: DirectoryLens | None = None
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
-        self.lens.succeeded.connect(self._on_success)
-        self.lens.failed.connect(self._on_failure)
+        self.connection_status = QLabel("Connect to a directory to use Directory Lens.")
 
         # CRUD buttons
         self.create_btn = QPushButton("Create")
@@ -70,10 +70,10 @@ class DirectoryLensTab(QWidget):
         btn_layout.addWidget(self.move_btn)
 
         # Main layout: lens, CRUD button bar, command input, log
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.lens)
-        layout.addLayout(btn_layout)
-        layout.addWidget(self.log)
+        self._layout = QVBoxLayout(self)
+        self._layout.addWidget(self.connection_status)
+        self._layout.addLayout(btn_layout)
+        self._layout.addWidget(self.log)
         # Natural‑language command input
         cmd_layout = QHBoxLayout()
         self.cmd_input = QLineEdit()
@@ -83,7 +83,39 @@ class DirectoryLensTab(QWidget):
         cmd_layout.addWidget(QLabel("Command:"))
         cmd_layout.addWidget(self.cmd_input)
         cmd_layout.addWidget(self.cmd_execute)
-        layout.addLayout(cmd_layout)
+        self._layout.addLayout(cmd_layout)
+        self.set_service(service)
+
+    @property
+    def lens(self) -> DirectoryLens:
+        if self._service is None:
+            raise RuntimeError("Connect to a directory before using Directory Lens.")
+        if self._lens is None:
+            self._lens = DirectoryLens(self._service, root_dn=self._service.profile.base_dn)
+            self._lens.succeeded.connect(self._on_success)
+            self._lens.failed.connect(self._on_failure)
+            self._layout.insertWidget(0, self._lens)
+            self.connection_status.hide()
+        return self._lens
+
+    def set_service(self, service: LDAPService | None) -> None:
+        if self._lens is not None:
+            self._layout.removeWidget(self._lens)
+            self._lens.deleteLater()
+            self._lens = None
+        self._service = service
+        self.connection_status.show()
+        for button in (self.create_btn, self.update_btn, self.delete_btn, self.move_btn):
+            button.setEnabled(service is not None and not service.profile.read_only)
+        self.cmd_execute.setEnabled(service is not None and not service.profile.read_only)
+        self.cmd_input.setEnabled(service is not None and not service.profile.read_only)
+        if service is not None and self.isVisible():
+            self.lens.view.show()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        if self._service is not None:
+            self.lens.view.show()
 
     # ---------------------------------------------------------------------
     # Signal handlers
@@ -109,6 +141,7 @@ class DirectoryLensTab(QWidget):
         try:
             attributes: Dict[str, List[Any]] = json.loads(attrs_text)
         except Exception as exc:  # pragma: no cover - defensive
+            log_exception(exc)
             self.log.appendPlainText(f"Invalid attributes JSON: {exc}")
             return
         self.lens.create_entry(dn, attributes)
@@ -125,6 +158,7 @@ class DirectoryLensTab(QWidget):
         try:
             changes: Dict[str, List[tuple[str, Any]]] = json.loads(changes_text)
         except Exception as exc:  # pragma: no cover - defensive
+            log_exception(exc)
             self.log.appendPlainText(f"Invalid changes JSON: {exc}")
             return
         self.lens.update_entry(dn, changes)
@@ -169,6 +203,7 @@ class DirectoryLensTab(QWidget):
         try:
             self._parse_and_execute(text)
         except Exception as exc:  # pragma: no cover - defensive
+            log_exception(exc)
             self.log.appendPlainText(f"Command error: {exc}")
 
     def _parse_and_execute(self, text: str) -> None:

@@ -4,51 +4,65 @@ from __future__ import annotations
 
 import logging
 import tempfile
-15 | from PyQt6.QtCore import (
-16 |     QAbstractItemModel,
-17 |     QEvent,
-18 |     QModelIndex,
-19 |     QObject,
-20 |     QRegularExpression,
-21 |     QSignalBlocker,
-22 |     Qt,
-23 |     QThreadPool,
-24 |     pyqtSignal,
-25 |     QPoint,
-26 | )
-27 | from PyQt6.QtGui import (
-28 |     QBrush,
-29 |     QColor,
-30 |     QGuiApplication,
-31 |     QKeyEvent,
-32 |     QSyntaxHighlighter,
-33 |     QTextCharFormat,
-34 |     QTextCursor,
-35 | )
-36 | from PyQt6.QtWidgets import (
-37 |     QCheckBox,
-38 |     QComboBox,
-39 |     QCompleter,
-40 |     QDialog,
-41 |     QDialogButtonBox,
-42 |     QFileDialog,
-43 |     QFormLayout,
-44 |     QHBoxLayout,
-45 |     QInputDialog,
-46 |     QLabel,
-47 |     QLineEdit,
-48 |     QMainWindow,
-49 |     QMessageBox,
-50 |     QPlainTextEdit,
-51 |     QProgressBar,
-52 |     QPushButton,
-53 |     QSplitter,
-54 |     QStyledItemDelegate,
-55 |     QStyleOptionViewItem,
-56 |     QTableWidget,
-57 |     QTableWidgetItem,
-58 |     QTabWidget,
-56 | 
+from collections.abc import Callable
+from dataclasses import replace
+from datetime import datetime
+from pathlib import Path
+from threading import Event, Lock
+from typing import Any
+from uuid import uuid4
+
+from PyQt6.QtCore import (
+    QAbstractItemModel,
+    QEvent,
+    QModelIndex,
+    QObject,
+    QPoint,
+    QRegularExpression,
+    QSignalBlocker,
+    Qt,
+    QThreadPool,
+    pyqtSignal,
+)
+from PyQt6.QtGui import (
+    QBrush,
+    QColor,
+    QGuiApplication,
+    QKeyEvent,
+    QSyntaxHighlighter,
+    QTextCharFormat,
+    QTextCursor,
+)
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QCompleter,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
+    QSplitter,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 from datasifter import __version__
 from datasifter.ai.local_model import LlamaCppFilterGenerator, model_sha256
@@ -65,13 +79,13 @@ from datasifter.directory.filters import (
     validate_filter,
 )
 from datasifter.directory.service import LDAPService
-from datasifter.ui.directory_lens_tab import DirectoryLensTab
-from datasifter.directory.service import LDAPService
+from datasifter.directory.worker import DirectoryWorker
 from datasifter.security.certificates import (
     CertificateTrustError,
     CertificateTrustStore,
     certificate_details,
 )
+from datasifter.ui.directory_lens_tab import DirectoryLensTab
 from datasifter.ui.settings_dialog import SettingsDialog
 
 logger = logging.getLogger("datasifter.protocol")
@@ -863,25 +877,9 @@ class MainWindow(QMainWindow):
         tabs.addTab(splitter, "Directory workspace")
         tabs.addTab(schema_panel, "Schema inspector")
         tabs.addTab(self.log_output, "Protocol log")
-        tabs.addTab(prompts_panel, "Directory Lens log")
-        # Add a dedicated tab for the DirectoryLens widget.  The widget is
-        # instantiated with a dummy LDAPService that uses the current profile
-        # (if any).  The service is passed to the widget so that CRUD
-        # operations can be exercised from the UI.
-        if self.profile:
-            service = LDAPService(self.profile, None)
-        else:
-            # Create a minimal profile for the tab when no profile is set.
-            from datasifter.config import DirectoryProfile
-            dummy_profile = DirectoryProfile(
-                name="demo", host="ldap.test", port=389, transport="plain",
-                authentication_mode="anonymous", bind_dn="", base_dn="dc=example,dc=com",
-                ca_certificate="", client_certificate="", client_key="", read_only=False,
-                profile_id="demo"
-            )
-            service = LDAPService(dummy_profile, None)
-        self.directory_lens_tab = DirectoryLensTab(service)
+        self.directory_lens_tab = DirectoryLensTab()
         tabs.addTab(self.directory_lens_tab, "Directory Lens")
+        tabs.addTab(prompts_panel, "Directory Lens log")
         self.tabs = tabs
         self.setCentralWidget(tabs)
         self.statusBar().showMessage("No directory connected")
@@ -1158,6 +1156,7 @@ class MainWindow(QMainWindow):
                 f"Profile settings were saved, but credentials were not fully updated: {error}",
             )
         if self._active_profile and self._active_profile.profile_id == updated.profile_id:
+            self.directory_lens_tab.set_service(None)
             self._active_profile = None
             self._selected_dn = None
             self.tree.clear()
@@ -1234,6 +1233,7 @@ class MainWindow(QMainWindow):
                 return
             self._session_passwords[profile.profile_id] = password
         self._active_profile = profile
+        self.directory_lens_tab.set_service(None)
         self._schema_options = {}
         self.schema_table.setRowCount(0)
         with QSignalBlocker(self.schema_object_class):
@@ -1329,6 +1329,12 @@ class MainWindow(QMainWindow):
             self._connect()
             return
         self._show_directory(result["entries"], result.get("cookie"))
+        try:
+            service = self._service(profile, self._profile_password(profile))
+        except ConfigurationError as error:
+            QMessageBox.critical(self, "Credential error", str(error))
+            return
+        self.directory_lens_tab.set_service(service)
         self._set_mutations_enabled(
             self._active_profile is not None and not self._active_profile.read_only
         )
@@ -2431,6 +2437,11 @@ class MainWindow(QMainWindow):
         else:
             lines.append(f"Filter: {result or '(cancelled)'}")
         self.ai_prompt_log.appendPlainText("\n".join(lines) + "\n")
+        logging.getLogger("datasifter.lens").info(
+            "Filter generation completed outcome=%s used_model=%s",
+            "failed" if error is not None else ("completed" if result else "cancelled"),
+            record["prompt"] is not None,
+        )
 
     def _clear_prompt_log(self) -> None:
         self.ai_prompt_log.clear()

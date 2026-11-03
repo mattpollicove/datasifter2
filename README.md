@@ -97,6 +97,16 @@ python -m pip install -e ".[dev,local-ai]"
 python -m datasifter
 ```
 
+On Windows, virtual-environment activation is optional. If PowerShell reports an
+execution-policy error, run the application directly without changing that policy:
+
+```powershell
+.\.venv\Scripts\python.exe -m datasifter
+```
+
+The Directory Lens CRUD tab remains disconnected until you connect a directory
+profile; opening the tab then loads that profile's base DN using its credentials.
+
 The llama.cpp package may need a platform-specific build toolchain. To run without AI support,
 install `-e ".[dev]"`; AI actions will report that the optional dependency or model is missing.
 **Directory Lens** is the local AI filter assistant. Open **Settings → Application settings**
@@ -284,7 +294,29 @@ their existing edit restrictions and search highlighting are preserved.
 The **Protocol log** shows sanitized decoded ldap3 outbound request dictionaries when available,
 with safe operation summaries as a fallback. Bind credentials, password-modify values, LDAP
 add/modify attribute values, controls, and LDAP search assertion values are redacted. Search filter
-structure and DNs remain visible for diagnosis. Logs are displayed locally in the application.
+structure and DNs remain visible for diagnosis. Logs are displayed locally in the application
+and persisted when launched through `python -m datasifter`, the `datasifter` command, or the
+standalone application.
+
+### Persistent diagnostics
+
+On Windows, the log is `%APPDATA%\DataSifter\logs\datasifter.log`. On other platforms it is
+`~/.config/datasifter/logs/datasifter.log`. Logs append across runs and rotate at 5 MiB,
+retaining three backups (`datasifter.log.1` through `.3`). No logs are stored in the repository.
+If the log cannot be created, startup reports the error rather than running without diagnostics.
+
+The file records sanitized LDAP protocol events, application start/stop, worker failures,
+uncaught Python exceptions (including Qt callback exceptions), and NLP filter-generation
+outcomes. Exception diagnostics contain exception types and file/function/line locations,
+including chained exceptions, but omit exception messages, source lines, and local variables
+because these can contain passwords. Raw NLP requests, model prompts, generated filters, and
+model responses are **not persisted**; the Directory Lens log still displays them in memory.
+Do not enter passwords into the search prompt. Clearing an in-app log does not delete log files.
+
+These are diagnostic logs, not a complete audit trail or native-crash dump. DNs and directory
+structure remain visible, so treat log files as sensitive and review them before sharing.
+An unexpected Python error displays the diagnostic path; more detailed exception messages may
+still appear in the terminal.
 
 Canceling active operations closes their LDAP sockets and signals every current worker. Cancellation
 is passed to network tests, certificate inspection, authentication, schema reads, entry reads, and

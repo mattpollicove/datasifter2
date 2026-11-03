@@ -8,6 +8,8 @@ from typing import Any
 
 from PyQt6.QtCore import QObject, QRunnable, pyqtSignal
 
+from datasifter.diagnostics import log_exception
+
 
 class WorkerSignals(QObject):
     succeeded = pyqtSignal(object)
@@ -44,6 +46,7 @@ class DirectoryWorker(QRunnable):
                     "the directory before retrying."
                 )
         except Exception as error:  # noqa: BLE001
+            log_exception(error)
             self.signals.failed.emit(str(error))
         finally:
             self.signals.finished.emit()

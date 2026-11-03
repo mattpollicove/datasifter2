@@ -1,7 +1,7 @@
 # DataSifter bill of materials
 
-Application version: **0.005**
-Generated: 2026-11-02T13:15:10.250938+00:00
+Application version: **0.006**
+Generated: 2026-11-03T01:37:50.078008+00:00
 
 Generated from the project manifest, installed distribution metadata, source files,
 and available packaged native binaries. Exact versions reflect this build environment.
@@ -95,6 +95,7 @@ their exact contents. See the specification and README for feature descriptions.
 | [src/datasifter/build_info.py](./src/datasifter/build_info.py) | source |
 | [src/datasifter/build_version.py](./src/datasifter/build_version.py) | source |
 | [src/datasifter/config.py](./src/datasifter/config.py) | source |
+| [src/datasifter/diagnostics.py](./src/datasifter/diagnostics.py) | source |
 | [src/datasifter/directory/__init__.py](./src/datasifter/directory/__init__.py) | source |
 | [src/datasifter/directory/filters.py](./src/datasifter/directory/filters.py) | source |
 | [src/datasifter/directory/service.py](./src/datasifter/directory/service.py) | source |
@@ -102,6 +103,8 @@ their exact contents. See the specification and README for feature descriptions.
 | [src/datasifter/security/__init__.py](./src/datasifter/security/__init__.py) | source |
 | [src/datasifter/security/certificates.py](./src/datasifter/security/certificates.py) | source |
 | [src/datasifter/ui/__init__.py](./src/datasifter/ui/__init__.py) | source |
+| [src/datasifter/ui/directory_lens.py](./src/datasifter/ui/directory_lens.py) | source |
+| [src/datasifter/ui/directory_lens_tab.py](./src/datasifter/ui/directory_lens_tab.py) | source |
 | [src/datasifter/ui/main_window.py](./src/datasifter/ui/main_window.py) | source |
 | [src/datasifter/ui/model_dialog.py](./src/datasifter/ui/model_dialog.py) | source |
 | [src/datasifter/ui/settings_dialog.py](./src/datasifter/ui/settings_dialog.py) | source |
@@ -111,6 +114,8 @@ their exact contents. See the specification and README for feature descriptions.
 | [tests/test_build_version.py](./tests/test_build_version.py) | test |
 | [tests/test_certificates.py](./tests/test_certificates.py) | test |
 | [tests/test_config.py](./tests/test_config.py) | test |
+| [tests/test_diagnostics.py](./tests/test_diagnostics.py) | test |
+| [tests/test_directory_lens.py](./tests/test_directory_lens.py) | test |
 | [tests/test_directory_service.py](./tests/test_directory_service.py) | test |
 | [tests/test_filters.py](./tests/test_filters.py) | test |
 | [tests/test_local_ai.py](./tests/test_local_ai.py) | test |

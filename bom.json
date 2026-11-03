@@ -1,15 +1,15 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:830d1a69-431d-400f-b051-481470023fcc",
+  "serialNumber": "urn:uuid:321926b7-3260-4a4c-b19e-871d93d85fef",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-02T13:15:10.250938+00:00",
+    "timestamp": "2026-11-03T01:37:50.078008+00:00",
     "component": {
       "type": "application",
-      "bom-ref": "datasifter:0.005",
+      "bom-ref": "datasifter:0.006",
       "name": "datasifter",
-      "version": "0.005"
+      "version": "0.006"
     },
     "properties": [
       {
@@ -1174,7 +1174,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "8ca432fa0704844aec9b2b2ad219c55205309ad8fec157f370e1186065af6b83"
+          "content": "bebf20201cfa6916f4202447a9fab4cd8accb87b7858feb8614e3419dac723ca"
         }
       ],
       "properties": [
@@ -1191,7 +1191,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c8206adc6e73be853f699978845b6820e8026884f6e778fabcfcfd63c887e021"
+          "content": "464c8d2888702dbe8407325187a51676f9d341b248cda9ef2d274516c1c55c6e"
         }
       ],
       "properties": [
@@ -1305,6 +1305,23 @@
     },
     {
       "type": "file",
+      "bom-ref": "file:src/datasifter/diagnostics.py",
+      "name": "src/datasifter/diagnostics.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "397dd7378c5077d507b65aa81c8e05cd262e93ea7b6d9356839cbd79544d5f89"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
       "bom-ref": "file:src/datasifter/directory/__init__.py",
       "name": "src/datasifter/directory/__init__.py",
       "hashes": [
@@ -1361,7 +1378,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "dc37e2f236ea2a396d01a99623e9eec5aade5aa2601fe6ace3ffce68590e0ee6"
+          "content": "0ce50a3e5c4492f5a0dad5af4cf21c91945fa187ff1596a6866c489772c44231"
         }
       ],
       "properties": [
@@ -1424,12 +1441,46 @@
     },
     {
       "type": "file",
+      "bom-ref": "file:src/datasifter/ui/directory_lens.py",
+      "name": "src/datasifter/ui/directory_lens.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6f298b0a5943b4f18996593184503fbb0cda5cafcd663a37c8823761cd409562"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/ui/directory_lens_tab.py",
+      "name": "src/datasifter/ui/directory_lens_tab.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "15e4137ceafb7084af4f1add38fef108ec2a46b1513029c2824548210acf95df"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
       "bom-ref": "file:src/datasifter/ui/main_window.py",
       "name": "src/datasifter/ui/main_window.py",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0158798aba9c36caeefc87a6557f43dcae8239171e434c541cc4066ea325dc68"
+          "content": "cd1ecdb51f4b85231f3a128641811af93acfab5882d5ffcb34795eada412c450"
         }
       ],
       "properties": [
@@ -1577,6 +1628,40 @@
     },
     {
       "type": "file",
+      "bom-ref": "file:tests/test_diagnostics.py",
+      "name": "tests/test_diagnostics.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6f689afd3c7cb32d38bc353c07de8b29ad96d910c2d5c8f32c6725327bad7c16"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_directory_lens.py",
+      "name": "tests/test_directory_lens.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "db186c0fa976aa7354b0608bc7db036d23d3caf534fc46dc59b3f07203138eb8"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
       "bom-ref": "file:tests/test_directory_service.py",
       "name": "tests/test_directory_service.py",
       "hashes": [
@@ -1650,7 +1735,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "912720fde51c13c74ede5ec1cdf204f65842b9704b248ffb8c996d8ebffb5d53"
+          "content": "24f736bbfcb86e71b0b1778af9941c493affe75fb499595551ac01b557788d09"
         }
       ],
       "properties": [
@@ -4030,7 +4115,7 @@
       ]
     },
     {
-      "ref": "datasifter:0.005",
+      "ref": "datasifter:0.006",
       "dependsOn": [
         "cpython:3.15.2",
         "file:datasifter.spec",
@@ -4160,6 +4245,7 @@
         "file:src/datasifter/build_info.py",
         "file:src/datasifter/build_version.py",
         "file:src/datasifter/config.py",
+        "file:src/datasifter/diagnostics.py",
         "file:src/datasifter/directory/__init__.py",
         "file:src/datasifter/directory/filters.py",
         "file:src/datasifter/directory/service.py",
@@ -4167,6 +4253,8 @@
         "file:src/datasifter/security/__init__.py",
         "file:src/datasifter/security/certificates.py",
         "file:src/datasifter/ui/__init__.py",
+        "file:src/datasifter/ui/directory_lens.py",
+        "file:src/datasifter/ui/directory_lens_tab.py",
         "file:src/datasifter/ui/main_window.py",
         "file:src/datasifter/ui/model_dialog.py",
         "file:src/datasifter/ui/settings_dialog.py",
@@ -4175,6 +4263,8 @@
         "file:tests/test_build_version.py",
         "file:tests/test_certificates.py",
         "file:tests/test_config.py",
+        "file:tests/test_diagnostics.py",
+        "file:tests/test_directory_lens.py",
         "file:tests/test_directory_service.py",
         "file:tests/test_filters.py",
         "file:tests/test_local_ai.py",

@@ -35,6 +35,94 @@ def test_ui_displays_current_build_version(qtbot, tmp_path):
     window.close()
 
 
+def test_startup_and_disconnected_lens_do_not_contact_ldap(qtbot, tmp_path, monkeypatch):
+    from datasifter import __main__
+    from datasifter.directory.service import LDAPService
+
+    assert __main__.MainWindow is MainWindow
+    monkeypatch.setattr(
+        LDAPService, "search", lambda *_args, **_kwargs: pytest.fail("Unexpected LDAP search")
+    )
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    window.show()
+    tab = window.directory_lens_tab
+    window.tabs.setCurrentWidget(tab)
+    assert tab._lens is None
+    assert tab._service is None
+    assert not tab.cmd_execute.isEnabled()
+    assert not tab.create_btn.isEnabled()
+    tab.cmd_input.setText("delete entry cn=Test,dc=example,dc=com")
+    tab._execute_command()
+    assert "Connect to a directory" in tab.log.toPlainText()
+    window.close()
+
+
+def test_connection_prepares_lens_with_real_profile_and_credentials(qtbot, tmp_path, monkeypatch):
+    from datasifter.directory.service import LDAPService
+
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    profile = DirectoryProfile(name="Connected", host="ldap.test", base_dn="dc=test")
+    window.configuration.profiles.append(profile)
+    window._active_profile = profile
+    service = LDAPService(profile, "session-password", "key-passphrase", window.trust_store)
+    monkeypatch.setattr(window, "_profile_password", lambda selected: service.password)
+
+    def make_service(selected, password):
+        assert selected is profile
+        assert password == "session-password"
+        return service
+
+    monkeypatch.setattr(window, "_service", make_service)
+    window._connection_result({"profile_id": profile.profile_id, "entries": []})
+    assert window.directory_lens_tab._service is service
+    assert window.directory_lens_tab._lens is None
+    assert window.directory_lens_tab.create_btn.isEnabled()
+    window.close()
+
+
+def test_directory_lens_initializes_on_show_and_resets_service(qtbot, monkeypatch):
+    from PyQt6.QtCore import pyqtSignal
+    from PyQt6.QtWidgets import QTreeView, QWidget
+
+    from datasifter.directory.service import LDAPService
+    from datasifter.ui import directory_lens_tab
+
+    created = []
+
+    class FakeLens(QWidget):
+        succeeded = pyqtSignal(object)
+        failed = pyqtSignal(str)
+
+        def __init__(self, service, root_dn):
+            super().__init__()
+            self.view = QTreeView(self)
+            created.append((service, root_dn))
+
+    monkeypatch.setattr(directory_lens_tab, "DirectoryLens", FakeLens)
+    profile = DirectoryProfile(name="Read-only", host="ldap.test", base_dn="dc=test", read_only=True)
+    service = LDAPService(profile, None)
+    tab = directory_lens_tab.DirectoryLensTab(service)
+    qtbot.addWidget(tab)
+    assert created == []
+    assert not tab.create_btn.isEnabled()
+    assert not tab.cmd_execute.isEnabled()
+    tab.show()
+    assert created == [(service, "dc=test")]
+    tab.lens.failed.emit("Search failed")
+    assert "Error: Search failed" in tab.log.toPlainText()
+    tab.set_service(None)
+    assert tab._lens is None
+    assert not tab.delete_btn.isEnabled()
+    assert tab.connection_status.isVisible()
+    replacement = LDAPService(DirectoryProfile(name="Other", host="other.test", base_dn="dc=other"), None)
+    tab.set_service(replacement)
+    assert created[-1] == (replacement, "dc=other")
+    assert tab.create_btn.isEnabled()
+    tab.close()
+
+
 def test_lens_enter_submits_and_shift_enter_inserts_newline(qtbot, tmp_path, monkeypatch):
     from PyQt6.QtCore import Qt
 
