@@ -1,6 +1,6 @@
 # DataSifter 2.0
 
-**ALPHA CODE / WORK IN PROGRESS**
+## ALPHA CODE / WORK IN PROGRESS
 
 Experimental, actively developed software; not production-ready. Features, configuration
 formats, and behavior may change. Test against a non-production directory and keep backups
@@ -34,7 +34,7 @@ features all available today.
 | Area | Implemented capabilities |
 | --- | --- |
 | Profiles and credentials | Create/edit profiles, network and authentication checks, local JSON preferences, OS keyring integration, read-only profiles |
-| Directory workspace | Paged DIT browsing, LDAP filter searches, attribute editing, schema-guided entry creation, delete, rename/move, password modification |
+| Directory Workbench | Paged DIT browsing, LDAP filter searches, attribute editing, schema-guided entry creation, delete, rename/move, password modification |
 | Transport and safety | Plain LDAP warnings, StartTLS/LDAPS, custom CA/client certificates, TOFU approval and rotation checks, write confirmations |
 | Schema inspector | Object-class filtering with inherited attributes and progressive attribute-name search |
 | Directory Lens | Local GGUF selection/download/approval, integrity checks, model reuse, streamed filter generation, deterministic simple searches, filter review, model-change logging |
@@ -104,18 +104,21 @@ execution-policy error, run the application directly without changing that polic
 .\.venv\Scripts\python.exe -m datasifter
 ```
 
-The Directory Lens CRUD tab remains disconnected until you connect a directory
-profile; opening the tab then loads that profile's base DN using its credentials.
+Directory changes are initiated from the natural-language request field in the
+Directory Workbench. Connect to a writable profile, enter a create, add, update,
+delete, or move command, and confirm the requested operation.
 
 The llama.cpp package may need a platform-specific build toolchain. To run without AI support,
 install `-e ".[dev]"`; AI actions will report that the optional dependency or model is missing.
 **Directory Lens** is the local AI filter assistant. Open **Settings → Application settings**
 for grouped **Directory Lens**, **Safety**, and **Appearance** options. Disable Directory Lens
 to hide its workspace panel and release the loaded model; re-enable it from the same screen.
-The approved model file is retained, and manual LDAP searches remain available. **Generate local
-filter** is disabled until a model is selected and approved, a directory is connected, a request
-is entered, and active operations have finished. Press **Enter** to generate; **Shift+Enter**
-inserts a new line. No font picker is provided; the application keeps the system font.
+The approved model file is retained, and manual LDAP searches remain available. **Run request**
+is enabled for searches after a model is selected and approved, a directory is connected, a request
+is entered, and active operations have finished. Explicit CRUD commands are routed to their
+confirmed operation flow and require a writable connection. Press **Enter** to run the request;
+**Shift+Enter** inserts a new line. No font picker is provided; the application keeps the system
+font.
 
 Choose a local GGUF model with **Choose GGUF file** in application settings (or
 **Settings → Directory Lens → Choose local GGUF model**). DataSifter asks you to
@@ -246,7 +249,7 @@ For a first-use or changed TLS certificate in the dialog, verify and accept its 
 then click **Test authentication** again to perform the bind. Accepted draft trust is kept
 temporary until Save; canceling the dialog does not replace the saved profile's trust.
 
-## Directory workspace
+## Directory Workbench
 
 The selected entry's distinguished name appears read-only above its attributes; select the
 text or click **Copy DN** to copy it.
@@ -377,6 +380,7 @@ because PyQt6, OpenSSL, keyring backends, and optional llama.cpp native librarie
 On Python installations providing an `abi3t-compat\python3t.dll` compatibility shim, the spec
 includes it for native extension loading. Keep the entire application directory together;
 do not copy only the executable.
+
 ## Library and component inventory
 
 Consult [BOM.md](./BOM.md) and the CycloneDX 1.6 [bom.json](./bom.json) before adding functionality.

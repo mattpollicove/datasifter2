@@ -91,6 +91,52 @@ def test_search_phrasing_preserves_the_complete_value(request_text, expected):
 
 
 @pytest.mark.parametrize(
+    ("request_text", "attributes", "expected"),
+    [
+        (
+            "show user mattp",
+            [
+                "objectClass",
+                "cn",
+                "uid",
+                "sAMAccountName",
+                "userPrincipalName",
+                "displayName",
+                "mail",
+                "employeeNumber",
+            ],
+            (
+                "(&(objectClass=person)(|(cn=mattp)(uid=mattp)(sAMAccountName=mattp)"
+                "(userPrincipalName=mattp)(displayName=mattp)(mail=mattp)(employeeNumber=mattp)))"
+            ),
+        ),
+        (
+            'find user "Matt Pollicove"',
+            ["objectClass", "cn", "uid"],
+            "(&(objectClass=person)(|(cn=Matt Pollicove)(uid=Matt Pollicove)))",
+        ),
+        (
+            "show user 'Matt Pollicove'",
+            ["objectClass", "cn", "uid"],
+            "(&(objectClass=person)(|(cn=Matt Pollicove)(uid=Matt Pollicove)))",
+        ),
+        (
+            'show user "matt*(p)"',
+            ["objectClass", "cn", "uid"],
+            r"(&(objectClass=person)(|(cn=matt\2a\28p\29)(uid=matt\2a\28p\29)))",
+        ),
+    ],
+)
+def test_user_lookup_checks_schema_supported_identity_attributes(
+    request_text, attributes, expected
+):
+    result = structured_filter(request_text, attributes)
+
+    assert result == expected
+    validate_filter(result)
+
+
+@pytest.mark.parametrize(
     "request_text",
     [
         "sn starts with b extra condition",

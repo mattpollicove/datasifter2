@@ -104,6 +104,15 @@ _CORE_OBJECT_CLASSES = (
     "person", "organizationalPerson", "inetOrgPerson", "groupOfNames",
     "groupOfUniqueNames", "organizationalUnit",
 )
+USER_ID_ATTRIBUTES = (
+    "cn",
+    "uid",
+    "sAMAccountName",
+    "userPrincipalName",
+    "displayName",
+    "mail",
+    "employeeNumber",
+)
 _SYNONYMS = {
     "phone": ("telephone", "phone", "mobile", "fax"),
     "phones": ("telephone", "phone", "mobile", "fax"),
@@ -217,6 +226,29 @@ ATTRIBUTE_ALIASES = {
     "initials": "initials",
     "description": "description",
 }
+ATTRIBUTE_COMMAND_ALIASES = {
+    "password": "userPassword",
+    "userpassword": "userPassword",
+    "phone": "telephoneNumber",
+    "phonenumber": "telephoneNumber",
+    "telephone": "telephoneNumber",
+    "telephonenumber": "telephoneNumber",
+    "tel": "telephoneNumber",
+    "workphone": "telephoneNumber",
+    "officephone": "telephoneNumber",
+    "businessphone": "telephoneNumber",
+    "mainphone": "telephoneNumber",
+    "mobile": "mobile",
+    "mobilenumber": "mobile",
+    "mobilephone": "mobile",
+    "cell": "mobile",
+    "cellnumber": "mobile",
+    "cellphone": "mobile",
+    "cellular": "mobile",
+    "cellularphone": "mobile",
+    "cellularnumber": "mobile",
+    "cellulartelephone": "mobile",
+}
 _COMPLEX_REQUEST = re.compile(
     r"\b(?:not|without|except|excluding|no|and|but|greater|less|more|fewer|before|after|"
     r"between|equal|equals|exactly|missing|empty)\b",
@@ -245,6 +277,12 @@ _ALWAYS_VALID = frozenset({"objectclass", "ou", "dc", "o", "cn"})
 _LOCATION = re.compile(
     r"\b(?:in|under|within|inside|from)\s+(?:the\s+)?(ou|o|dc|cn|l)\s*[= ]\s*"
     r"([A-Za-z0-9][\w.-]*)",
+    re.IGNORECASE,
+)
+_USER_LOOKUP = re.compile(
+    r"^\s*(?:(?:show|find|list|get|search|display)\s+)?(?:the\s+)?user\s+"
+    r"(?:(?:named|called)\s+)?(?:\"(?P<double>[^\"]+)\"|'(?P<single>[^']+)'|"
+    r"(?P<bare>[A-Za-z0-9._@+-]+))\s*$",
     re.IGNORECASE,
 )
 _QUOTED_VALUES = re.compile(r"""(?<!\w)(?:"[^"]*(?:"|$)|'[^']*(?:'|$))""")
@@ -304,6 +342,21 @@ def structured_filter(request: str, attributes: Iterable[str]) -> str | None:
         return None
     schema = list(attributes)
     lookup = _schema_lookup(schema)
+
+    user_match = _USER_LOOKUP.fullmatch(text)
+    if user_match:
+        value = next(group for group in user_match.groups() if group is not None)
+        targets = [
+            lookup.get(name.casefold(), name)
+            for name in USER_ID_ATTRIBUTES
+            if not lookup or name.casefold() in lookup
+        ]
+        if not targets:
+            return None
+        assertions = "".join(
+            f"({name}={escape_filter_value(value)})" for name in targets
+        )
+        return f"(&(objectClass=person)(|{assertions}))"
 
     def attribute_for(word: str) -> str | None:
         folded = word.casefold()

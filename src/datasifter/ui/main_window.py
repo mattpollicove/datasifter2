@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import tempfile
 from collections.abc import Callable
 from dataclasses import replace
@@ -651,7 +652,9 @@ class MainWindow(QMainWindow):
         self.thread_pool = QThreadPool.globalInstance()
         self._workers: set[DirectoryWorker] = set()
         self._current_worker: DirectoryWorker | None = None
+        self._connection_epoch = 0
         self._active_profile: DirectoryProfile | None = None
+        self._connecting = False
         self._session_passwords: dict[str, str] = {}
         self._loaded_model: tuple[str, str, LlamaCppFilterGenerator] | None = None
         self._model_lock = Lock()
@@ -670,6 +673,7 @@ class MainWindow(QMainWindow):
         logger.setLevel(logging.INFO)
         self._build_ui()
         self._refresh_profiles()
+        self._refresh_connection_controls()
 
     def _build_ui(self) -> None:
         toolbar = QWidget()
@@ -680,12 +684,21 @@ class MainWindow(QMainWindow):
         self.add_profile_button = QPushButton("Add profile")
         self.edit_profile_button = QPushButton("Edit profile")
         self.connect_button = QPushButton("Connect")
+        self.disconnect_button = QPushButton("Disconnect")
+        self.disconnect_button.setEnabled(False)
+        self.refresh_tree_button = QPushButton("Refresh tree")
+        self.refresh_tree_button.setEnabled(False)
+        self.refresh_tree_button.setToolTip(
+            "Refresh the highlighted entry's subtree, or the directory root if none is highlighted."
+        )
         self.cancel_button = QPushButton("Cancel active operations")
         self.cancel_button.setEnabled(False)
         self.list_profiles_button.clicked.connect(self._list_profiles)
         self.add_profile_button.clicked.connect(self._add_profile)
         self.edit_profile_button.clicked.connect(self._edit_profile)
         self.connect_button.clicked.connect(self._connect)
+        self.disconnect_button.clicked.connect(self._disconnect)
+        self.refresh_tree_button.clicked.connect(self._refresh_tree)
         self.cancel_button.clicked.connect(self._cancel_operation)
         toolbar_layout.addWidget(QLabel("Directory"))
         toolbar_layout.addWidget(self.profiles, 1)
@@ -693,6 +706,8 @@ class MainWindow(QMainWindow):
         toolbar_layout.addWidget(self.add_profile_button)
         toolbar_layout.addWidget(self.edit_profile_button)
         toolbar_layout.addWidget(self.connect_button)
+        toolbar_layout.addWidget(self.disconnect_button)
+        toolbar_layout.addWidget(self.refresh_tree_button)
         toolbar_layout.addWidget(self.cancel_button)
 
         self.progress = QProgressBar()
@@ -711,6 +726,8 @@ class MainWindow(QMainWindow):
         self.tree.setHeaderLabel("Directory Information Tree")
         self.tree.itemClicked.connect(self._select_entry)
         self.tree.itemExpanded.connect(self._expand_directory_node)
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._tree_context_menu)
 
         self.attributes = QTableWidget(0, 2)
         self.attributes.setHorizontalHeaderLabels(["Attribute", "Values"])
@@ -766,14 +783,16 @@ class MainWindow(QMainWindow):
         filter_row.addWidget(self.filter_execute)
 
         self.ai_request = LensRequestEdit()
-        self.ai_request.setPlaceholderText("Describe the directory entries you want to find.")
-        self.ai_request.setToolTip("Enter: generate filter. Shift+Enter: new line.")
+        self.ai_request.setPlaceholderText(
+            "Describe entries to find, or enter a user creation command."
+        )
+        self.ai_request.setToolTip("Enter: run request. Shift+Enter: new line.")
         self.ai_request.submitted.connect(
             lambda: self.ai_generate.click() if self.ai_generate.isEnabled() else None
         )
         self.ai_request.textChanged.connect(self._refresh_lens_controls)
         self.ai_request.setMaximumHeight(90)
-        self.ai_generate = QPushButton("Generate local filter")
+        self.ai_generate = QPushButton("Run request")
         self.ai_generate.clicked.connect(self._generate_filter)
         self.ai_output = QPlainTextEdit()
         self.ai_output.setReadOnly(True)
@@ -874,11 +893,10 @@ class MainWindow(QMainWindow):
         prompts_layout.addLayout(prompts_toolbar)
         prompts_layout.addWidget(self.ai_prompt_log)
         tabs = QTabWidget()
-        tabs.addTab(splitter, "Directory workspace")
+        tabs.addTab(splitter, "Directory Workbench")
         tabs.addTab(schema_panel, "Schema inspector")
         tabs.addTab(self.log_output, "Protocol log")
-        self.directory_lens_tab = DirectoryLensTab()
-        tabs.addTab(self.directory_lens_tab, "Directory Lens")
+        self.directory_lens_tab = DirectoryLensTab(parent=self)
         tabs.addTab(prompts_panel, "Directory Lens log")
         self.tabs = tabs
         self.setCentralWidget(tabs)
@@ -994,13 +1012,23 @@ class MainWindow(QMainWindow):
         dialog.accept()
 
     def _refresh_lens_controls(self) -> None:
+        if hasattr(self, "tabs"):
+            self._refresh_connection_controls()
         preferences = self.configuration.preferences
+        request = self.ai_request.toPlainText().strip()
+        create_kind = self._create_request_kind(request)
+        crud_request = self._is_crud_request(request)
         approved = bool(
             preferences.model_path and preferences.model_sha256 and preferences.model_provenance
             and Path(preferences.model_path).suffix.casefold() == ".gguf"
         )
         reason = ""
-        if not preferences.ai_enabled:
+        if crud_request:
+            if not self.directory_lens_tab.cmd_execute.isEnabled():
+                reason = "Connect to a writable directory before running commands."
+            elif self._workers:
+                reason = "Wait for active operations to finish."
+        elif not preferences.ai_enabled:
             reason = "Enable Directory Lens in Application settings."
         elif not approved:
             reason = "Select and approve a local GGUF model in Application settings."
@@ -1010,13 +1038,32 @@ class MainWindow(QMainWindow):
             reason = "Connect to a directory first."
         elif not self.ai_request.toPlainText().strip():
             reason = "Describe the directory entries you want to find."
+        self.ai_generate.setText(
+            "Create user" if create_kind == "user" else
+            "Create entry" if create_kind == "entry" else
+            "Run command" if crud_request else
+            "Run request"
+        )
         self.ai_generate.setEnabled(not reason)
-        self.ai_generate.setToolTip(reason or "Generate a local LDAP filter (Enter)")
+        action_hint = (
+            "Run the Directory Commands command with confirmation (Enter)"
+            if crud_request
+            else "Run the Directory Lens request (Enter)"
+        )
+        self.ai_generate.setToolTip(reason or action_hint)
         self.ai_request.setEnabled(preferences.ai_enabled)
         if self._settings_dialog is not None:
             self._settings_dialog.set_busy(
                 bool(self._workers), preferences.ai_enabled, approved
             )
+
+    def _refresh_connection_controls(self) -> None:
+        connected = self._active_profile is not None and not self._connecting
+        self.filter_edit.setEnabled(connected)
+        self.filter_execute.setEnabled(connected)
+        self.ai_panel.setEnabled(connected)
+        self.schema_refresh_button.setEnabled(connected)
+        self.refresh_tree_button.setEnabled(connected and not self._workers)
 
     def _log_lens_event(self, message: str) -> None:
         self.ai_prompt_log.appendPlainText(
@@ -1158,6 +1205,7 @@ class MainWindow(QMainWindow):
         if self._active_profile and self._active_profile.profile_id == updated.profile_id:
             self.directory_lens_tab.set_service(None)
             self._active_profile = None
+            self._connecting = False
             self._selected_dn = None
             self.tree.clear()
             self.attributes.setRowCount(0)
@@ -1165,6 +1213,8 @@ class MainWindow(QMainWindow):
             self._known_attributes = []
             self._schema_names.pop(updated.profile_id, None)
             self._set_mutations_enabled(False)
+            self.disconnect_button.setEnabled(False)
+            self._refresh_connection_controls()
             self.statusBar().showMessage("Profile updated. Connect again to browse the directory.")
         self._refresh_profiles()
         self.profiles.setCurrentIndex(self.profiles.findData(updated.profile_id))
@@ -1233,7 +1283,11 @@ class MainWindow(QMainWindow):
                 return
             self._session_passwords[profile.profile_id] = password
         self._active_profile = profile
+        self._connecting = True
+        self.disconnect_button.setEnabled(True)
         self.directory_lens_tab.set_service(None)
+        self._set_mutations_enabled(False)
+        self._refresh_connection_controls()
         self._schema_options = {}
         self.schema_table.setRowCount(0)
         with QSignalBlocker(self.schema_object_class):
@@ -1293,9 +1347,10 @@ class MainWindow(QMainWindow):
             ),
             None,
         )
-        if profile is None or (
-            self._active_profile
-            and profile.profile_id != self._active_profile.profile_id
+        if (
+            profile is None
+            or self._active_profile is None
+            or profile.profile_id != self._active_profile.profile_id
         ):
             return
         certificate = result.get("certificate")
@@ -1335,6 +1390,8 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Credential error", str(error))
             return
         self.directory_lens_tab.set_service(service)
+        self._connecting = False
+        self._refresh_connection_controls()
         self._set_mutations_enabled(
             self._active_profile is not None and not self._active_profile.read_only
         )
@@ -1551,6 +1608,57 @@ class MainWindow(QMainWindow):
         ):
             return
         self._load_children(item, distinguished_name, None)
+
+    def _refresh_tree(self) -> None:
+        if self._active_profile is None:
+            return
+        item = self.tree.currentItem() or self.tree.topLevelItem(0)
+        if item is not None and item.data(0, Qt.ItemDataRole.UserRole + 4):
+            item = item.parent() or self.tree.topLevelItem(0)
+        if item is None:
+            self.statusBar().showMessage("Connect to a directory before refreshing the tree.")
+            return
+        self._refresh_tree_item(item)
+
+    def _tree_context_menu(self, position: QPoint) -> None:
+        item = self.tree.itemAt(position)
+        if item is None or item.data(0, Qt.ItemDataRole.UserRole + 4):
+            return
+        distinguished_name = item.data(0, Qt.ItemDataRole.UserRole)
+        if not distinguished_name:
+            return
+        menu = QMenu(self)
+        refresh_action = menu.addAction("Refresh subtree")
+        selected_action = menu.exec(self.tree.viewport().mapToGlobal(position))
+        if selected_action is refresh_action:
+            self._refresh_tree_item(item)
+
+    def _refresh_tree_item(self, item: QTreeWidgetItem) -> None:
+        if self._active_profile is None:
+            return
+        if self._workers:
+            self.statusBar().showMessage("Wait for active operations to finish before refreshing.")
+            return
+        distinguished_name = item.data(0, Qt.ItemDataRole.UserRole)
+        if not distinguished_name:
+            return
+        distinguished_name = str(distinguished_name)
+        selected_dn = self._selected_dn
+        if not self._confirm_leave_entry():
+            return
+        if (
+            selected_dn
+            and selected_dn.casefold() != distinguished_name.casefold()
+            and selected_dn.casefold().endswith("," + distinguished_name.casefold())
+        ):
+            self._clear_entry_view()
+        self._load_children(item, distinguished_name, None)
+        if (
+            selected_dn
+            and selected_dn.casefold() == distinguished_name.casefold()
+            and self._selected_dn == distinguished_name
+        ):
+            self._load_entry(distinguished_name)
 
     def _load_children(
         self,
@@ -2081,12 +2189,21 @@ class MainWindow(QMainWindow):
         if not changes:
             self.statusBar().showMessage("No attribute changes to save")
             return
+        distinguished_name = self._selected_dn
+        reply = QMessageBox.question(
+            self,
+            "Confirm attribute changes",
+            f"Apply these changes to the highlighted entry?\n\n{distinguished_name}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
         try:
             password = self._profile_password(profile)
         except ConfigurationError as error:
             QMessageBox.critical(self, "Credential error", str(error))
             return
-        distinguished_name = self._selected_dn
 
         def operation(
             cancelled: Event,
@@ -2324,7 +2441,31 @@ class MainWindow(QMainWindow):
 
         self._run_worker(operation, lambda _result: self._load_entry(distinguished_name))
 
+    @staticmethod
+    def _create_request_kind(request: str) -> str | None:
+        match = re.match(
+            r"^\s*(?:please\s+)?create\s+(?:a\s+)?(user|entry)\b",
+            request,
+            re.IGNORECASE,
+        )
+        return match.group(1).casefold() if match else None
+
+    @staticmethod
+    def _is_crud_request(request: str) -> bool:
+        return bool(
+            re.match(
+                r"^\s*(?:please\s+)?(?:create|add|update|delete|move)\b",
+                request,
+                re.IGNORECASE,
+            )
+        )
+
     def _generate_filter(self) -> None:
+        request = self.ai_request.toPlainText().strip()
+        if self._is_crud_request(request):
+            self._refresh_lens_controls()
+            self.directory_lens_tab.submit_command(request)
+            return
         self._refresh_lens_controls()
         if not self.ai_generate.isEnabled():
             QMessageBox.information(self, "Directory Lens", self.ai_generate.toolTip())
@@ -2335,7 +2476,6 @@ class MainWindow(QMainWindow):
             return
         model_path = self.configuration.preferences.model_path
         model_sha256_expected = self.configuration.preferences.model_sha256
-        request = self.ai_request.toPlainText()
         loaded = self._loaded_model
         model_lock = self._model_lock
         cached_schema = self._schema_names.get(profile.profile_id)
@@ -2694,17 +2834,28 @@ class MainWindow(QMainWindow):
         on_failure: Callable[[str], None] | None = None,
         on_progress: Callable[[int, str], None] | None = None,
     ) -> None:
+        connection_epoch = self._connection_epoch
+
+        def deliver_success(result: Any) -> None:
+            if connection_epoch == self._connection_epoch:
+                on_success(result)
+
+        def deliver_failure(message: str) -> None:
+            if connection_epoch == self._connection_epoch:
+                (on_failure or self._show_error)(message)
+
+        def deliver_progress(percent: int, message: str) -> None:
+            if connection_epoch != self._connection_epoch:
+                return
+            if on_progress:
+                on_progress(percent, message)
+            else:
+                self.statusBar().showMessage(f"{percent}% — {message}")
+
         worker = DirectoryWorker(operation)
-        worker.signals.succeeded.connect(on_success)
-        worker.signals.failed.connect(on_failure or self._show_error)
-        if on_progress:
-            worker.signals.progress.connect(on_progress)
-        else:
-            worker.signals.progress.connect(
-                lambda percent, message: self.statusBar().showMessage(
-                    f"{percent}% — {message}"
-                )
-            )
+        worker.signals.succeeded.connect(deliver_success)
+        worker.signals.failed.connect(deliver_failure)
+        worker.signals.progress.connect(deliver_progress)
         worker.signals.finished.connect(lambda: self._worker_finished(worker))
         self._workers.add(worker)
         self._refresh_lens_controls()
@@ -2712,6 +2863,7 @@ class MainWindow(QMainWindow):
         self._current_worker = worker
         self.profiles.setEnabled(False)
         self.connect_button.setEnabled(False)
+        self.disconnect_button.setEnabled(self._active_profile is not None)
         self.add_profile_button.setEnabled(False)
         self.edit_profile_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
@@ -2729,10 +2881,60 @@ class MainWindow(QMainWindow):
         if not self._workers:
             self.profiles.setEnabled(True)
             self.connect_button.setEnabled(True)
+            self.disconnect_button.setEnabled(self._active_profile is not None)
             self.add_profile_button.setEnabled(True)
             self.edit_profile_button.setEnabled(True)
             self.cancel_button.setEnabled(False)
             self.progress.setVisible(False)
+
+    def _disconnect(self) -> None:
+        if self._workers:
+            reply = QMessageBox.question(
+                self,
+                "Disconnect from directory",
+                f"Cancel {len(self._workers)} active operation(s) and disconnect? "
+                "A submitted directory change may already have completed; verify the "
+                "directory before retrying.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        if not self._confirm_leave_entry():
+            return
+
+        self._connection_epoch += 1
+        self._cancel_operation()
+        profile = self._active_profile
+        self._active_profile = None
+        self._connecting = False
+        self.directory_lens_tab.set_service(None)
+        self._schema_options = {}
+        self._known_object_classes = []
+        self._known_attributes = []
+        if profile is not None:
+            self._schema_names.pop(profile.profile_id, None)
+        self.schema_table.setRowCount(0)
+        with QSignalBlocker(self.schema_object_class):
+            self.schema_object_class.clear()
+            self.schema_object_class.addItem("All object classes", "")
+        self.schema_status.setText("Connect to a directory before loading its schema.")
+        self.warning_banner.setVisible(False)
+        self.transport_warning.clear()
+        self.transport_warning.setVisible(False)
+        self.tree.clear()
+        self.attributes.setRowCount(0)
+        self.dn_field.clear()
+        self._selected_item = None
+        self._selected_dn = None
+        self._search_attributes.clear()
+        self._original_attributes.clear()
+        self._readonly_attribute_names.clear()
+        self.copy_dn_button.setEnabled(False)
+        self._set_mutations_enabled(False)
+        self.disconnect_button.setEnabled(False)
+        self.statusBar().showMessage("Disconnected")
+        self._refresh_connection_controls()
+        self._refresh_lens_controls()
 
     def _show_error(self, message: str) -> None:
         self.statusBar().showMessage("Operation failed")

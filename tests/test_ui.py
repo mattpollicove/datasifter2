@@ -45,9 +45,25 @@ def test_startup_and_disconnected_lens_do_not_contact_ldap(qtbot, tmp_path, monk
     )
     window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
     qtbot.addWidget(window)
+    assert window.tabs.tabText(0) == "Directory Workbench"
+    assert window.tabs.indexOf(window.directory_lens_tab) == -1
     window.show()
     tab = window.directory_lens_tab
-    window.tabs.setCurrentWidget(tab)
+    assert [
+        tab.create_btn.text(),
+        tab.update_btn.text(),
+        tab.delete_btn.text(),
+        tab.move_btn.text(),
+        tab.refresh_btn.text(),
+        tab.cmd_execute.text(),
+    ] == [
+        "Create entry",
+        "Update entry",
+        "Delete entry",
+        "Move entry",
+        "Refresh tree",
+        "Run command",
+    ]
     assert tab._lens is None
     assert tab._service is None
     assert not tab.cmd_execute.isEnabled()
@@ -63,6 +79,11 @@ def test_connection_prepares_lens_with_real_profile_and_credentials(qtbot, tmp_p
 
     window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
     qtbot.addWidget(window)
+    assert window.tabs.indexOf(window.directory_lens_tab) == -1
+    assert not window.filter_edit.isEnabled()
+    assert not window.filter_execute.isEnabled()
+    assert not window.ai_panel.isEnabled()
+    assert not window.schema_refresh_button.isEnabled()
     profile = DirectoryProfile(name="Connected", host="ldap.test", base_dn="dc=test")
     window.configuration.profiles.append(profile)
     window._active_profile = profile
@@ -79,6 +100,56 @@ def test_connection_prepares_lens_with_real_profile_and_credentials(qtbot, tmp_p
     assert window.directory_lens_tab._service is service
     assert window.directory_lens_tab._lens is None
     assert window.directory_lens_tab.create_btn.isEnabled()
+    assert window.filter_edit.isEnabled()
+    assert window.filter_execute.isEnabled()
+    assert window.ai_panel.isEnabled()
+    assert window.schema_refresh_button.isEnabled()
+    window.close()
+
+
+def test_disconnect_clears_session_and_ignores_late_connection_result(
+    qtbot, tmp_path, monkeypatch
+):
+    from datasifter.directory.service import LDAPService
+
+    profile = DirectoryProfile(name="Connected", host="ldap.test", base_dn="dc=test")
+    store = ConfigurationStore(tmp_path / "profiles.json")
+    store.save(LocalConfiguration(profiles=[profile]))
+    window = MainWindow(store=store)
+    qtbot.addWidget(window)
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
+    )
+    window._active_profile = profile
+    window.directory_lens_tab.set_service(LDAPService(profile, None))
+    window._show_directory([{"dn": "cn=Matt,dc=test", "attributes": {"cn": ["Matt"]}}])
+    workers = []
+    callbacks = []
+    monkeypatch.setattr(window.thread_pool, "start", workers.append)
+    window._run_worker(lambda *_args: "late result", callbacks.append)
+    window.disconnect_button.setEnabled(True)
+
+    window.disconnect_button.click()
+    workers[0].signals.succeeded.emit("late result")
+    workers[0].signals.finished.emit()
+    window._connection_result(
+        {
+            "profile_id": profile.profile_id,
+            "entries": [{"dn": "cn=Late,dc=test", "attributes": {}}],
+        }
+    )
+
+    assert workers[0].cancelled.is_set()
+    assert callbacks == []
+    assert window._active_profile is None
+    assert window.disconnect_button.isEnabled() is False
+    assert window.directory_lens_tab._service is None
+    assert window.tree.topLevelItemCount() == 0
+    assert window.attributes.rowCount() == 0
+    assert window.configuration.profiles == [profile]
+    assert window.statusBar().currentMessage() == "Disconnected"
     window.close()
 
 
@@ -136,6 +207,7 @@ def test_lens_enter_submits_and_shift_enter_inserts_newline(qtbot, tmp_path, mon
     preferences.model_provenance = "Test catalog"
     window.ai_request.setPlainText("surname starts with b")
     assert window.ai_generate.isEnabled()
+    assert window.ai_generate.text() == "Run request"
     submitted = []
     window.ai_generate.clicked.disconnect()
     window.ai_generate.clicked.connect(lambda: submitted.append(True))
@@ -175,6 +247,146 @@ def test_lens_requires_approved_model_and_rejects_disabled_ai(qtbot, tmp_path, m
     window._load_model()
     assert len(messages) == 2
     assert not window.ai_generate.isEnabled()
+    window.close()
+
+
+def test_create_user_request_routes_to_directory_lens_crud(qtbot, tmp_path, monkeypatch):
+    from datasifter.directory.service import LDAPService
+
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    profile = DirectoryProfile(name="test", host="ldap.test")
+    window._active_profile = profile
+    window.directory_lens_tab.set_service(LDAPService(profile, None))
+    request = "create user Matt Pollicove in the people OU, cn is mattp, password is example"
+    window.ai_request.setPlainText(request)
+    submitted = []
+    monkeypatch.setattr(
+        window.directory_lens_tab,
+        "_parse_and_execute",
+        lambda text: submitted.append(text),
+    )
+    monkeypatch.setattr(
+        window,
+        "_run_worker",
+        lambda *_args, **_kwargs: pytest.fail("Create requests must not run filter generation"),
+    )
+
+    assert window.ai_generate.isEnabled()
+    assert window.ai_generate.text() == "Create user"
+    window.ai_generate.click()
+
+    assert window.tabs.currentWidget() is window.tabs.widget(0)
+    assert window.tabs.indexOf(window.directory_lens_tab) == -1
+    assert window.directory_lens_tab.cmd_input.text() == request
+    assert submitted == [request]
+    window.close()
+
+
+def test_refresh_tree_button_refreshes_from_highlighted_entry(qtbot, tmp_path, monkeypatch):
+    from threading import Event
+
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QTreeWidgetItem
+
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    profile = DirectoryProfile(name="test", host="ldap.test", base_dn="dc=example,dc=com")
+    window._active_profile = profile
+    parent_dn = "ou=people,dc=example,dc=com"
+    root = QTreeWidgetItem(["dc=example,dc=com"])
+    root.setData(0, Qt.ItemDataRole.UserRole, "dc=example,dc=com")
+    parent = QTreeWidgetItem(["ou=people,dc=example,dc=com"])
+    parent.setData(0, Qt.ItemDataRole.UserRole, parent_dn)
+    root.addChild(parent)
+    window.tree.addTopLevelItem(root)
+    window.tree.setCurrentItem(parent)
+    window._selected_item = parent
+    window._selected_dn = parent_dn
+    searched_bases = []
+    read_dns = []
+
+    class FakeService:
+        def search_page(self, base_dn, *_args, **_kwargs):
+            searched_bases.append(base_dn)
+            return ([{"dn": f"cn=Refreshed,{parent_dn}", "attributes": {}}], None)
+
+        def read_entry(self, distinguished_name, **_kwargs):
+            read_dns.append(distinguished_name)
+            return {"attributes": {"cn": ["Refreshed"]}}
+
+    service = FakeService()
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: None)
+    monkeypatch.setattr(window, "_service", lambda *_args: service)
+    monkeypatch.setattr(window, "_confirm_leave_entry", lambda: True)
+    monkeypatch.setattr(
+        window,
+        "_run_worker",
+        lambda operation, success, *_args, **_kwargs: success(
+            operation(Event(), lambda *_args: None)
+        ),
+    )
+    window._refresh_connection_controls()
+
+    assert window.refresh_tree_button.isEnabled()
+    window.refresh_tree_button.click()
+
+    assert searched_bases == [parent_dn]
+    assert read_dns == [parent_dn]
+    assert parent.childCount() == 1
+    assert window._selected_dn == parent_dn
+    window.close()
+
+
+def test_tree_context_menu_refreshes_the_clicked_entry(qtbot, tmp_path, monkeypatch):
+    from PyQt6.QtCore import QPoint, Qt
+    from PyQt6.QtWidgets import QMenu, QTreeWidget, QTreeWidgetItem
+
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    clicked_item = QTreeWidgetItem(["ou=people,dc=example,dc=com"])
+    clicked_item.setData(0, Qt.ItemDataRole.UserRole, "ou=people,dc=example,dc=com")
+    refreshed = []
+    monkeypatch.setattr(QTreeWidget, "itemAt", lambda _tree, _position: clicked_item)
+    monkeypatch.setattr(QMenu, "exec", lambda menu, _position: menu.actions()[0])
+    monkeypatch.setattr(window, "_refresh_tree_item", refreshed.append)
+
+    window._tree_context_menu(QPoint(1, 1))
+
+    assert refreshed == [clicked_item]
+    window.close()
+
+
+def test_add_phone_request_routes_to_directory_commands_not_search(qtbot, tmp_path, monkeypatch):
+    from datasifter.directory.service import LDAPService
+
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    profile = DirectoryProfile(name="test", host="ldap.test")
+    window._active_profile = profile
+    window.directory_lens_tab.set_service(LDAPService(profile, None))
+    request = "add phone number to mattp 732 555 1212"
+    window.ai_request.setPlainText(request)
+    submitted = []
+    monkeypatch.setattr(
+        window.directory_lens_tab,
+        "_parse_and_execute",
+        lambda text: submitted.append(text),
+    )
+    monkeypatch.setattr(
+        window,
+        "_run_worker",
+        lambda *_args, **_kwargs: pytest.fail("CRUD requests must not run filter generation"),
+    )
+
+    assert window.ai_generate.isEnabled()
+    assert window.ai_generate.text() == "Run command"
+    window.ai_generate.click()
+
+    assert window.tabs.currentWidget() is window.tabs.widget(0)
+    assert window.tabs.indexOf(window.directory_lens_tab) == -1
+    assert window.directory_lens_tab.cmd_input.text() == request
+    assert submitted == [request]
     window.close()
 
 
@@ -436,18 +648,30 @@ def test_attribute_edits_do_not_delete_read_only_attributes(qtbot, tmp_path, mon
     )
     window.attributes.item(row, 1).setText("updated")
     captured = []
+    confirmations = []
 
     class FakeService:
         def modify_entry(self, dn, changes, cancelled):
-            captured.append(changes)
+            captured.append((dn, changes))
 
     monkeypatch.setattr(window, "_service", lambda *_args: FakeService())
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda _parent, _title, message, *_args: (
+            confirmations.append(message) or QMessageBox.StandardButton.Yes
+        ),
+    )
     monkeypatch.setattr(
         window, "_run_worker",
         lambda operation, *_args: operation(Event(), lambda *_args: None),
     )
     window._save_entry_changes()
-    assert captured == [{"cn": [("replace", ["updated"])]}]
+    assert captured == [(
+        "cn=test,dc=test",
+        {"cn": [("replace", ["updated"])]},
+    )]
+    assert confirmations and "cn=test,dc=test" in confirmations[0]
     window._clear_entry_view()
     window.close()
 
@@ -1312,6 +1536,12 @@ def test_connect_prompts_for_unsaved_simple_bind_password(qtbot, tmp_path, monke
     )
 
     window._connect()
+
+    assert window._connecting
+    assert not window.tabs.isTabEnabled(window.tabs.indexOf(window.directory_lens_tab))
+    assert not window.filter_edit.isEnabled()
+    assert not window.filter_execute.isEnabled()
+    assert not window.ai_panel.isEnabled()
 
     from threading import Event
 
