@@ -14,6 +14,12 @@ DataSifter is a local-first LDAP desktop client. This implementation targets Pha
 [`datasifter2.0_spec.md`](./datasifter2.0_spec.md): LDAP directory workspaces and an optional
 offline llama.cpp assistant.
 
+**AI use:** Directory Lens optionally uses a user-approved local GGUF model through llama.cpp
+to draft LDAP search filters. Inference runs on your machine, using request text and schema
+attribute names rather than directory entry values. Model output can be inaccurate; review
+filters before executing searches. For AI-assisted software development practices, see
+[AI_DEVELOPMENT.md](./AI_DEVELOPMENT.md).
+
 Directory Lens supports **local GGUF model files only**, loaded through
 `llama-cpp-python`. Selection and loading reject other extensions and files without a GGUF
 header, even if renamed to `.gguf`. A GGUF header alone does not establish model compatibility
