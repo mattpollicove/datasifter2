@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from datasifter import __version__
@@ -50,6 +51,7 @@ def main() -> int:
             )
             return 1
         window.show()
+        QTimer.singleShot(0, window._prompt_model_on_startup)
         return application.exec()
     finally:
         logging.getLogger("datasifter.diagnostics").info("Application stopped")

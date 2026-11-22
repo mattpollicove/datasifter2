@@ -29,6 +29,10 @@ def test_catalog_exposes_supported_intents_and_operations():
     assert {item.backend.value for item in catalog.backends} == {"standard_ldap", "active_directory"}
     assert catalog.safety_constraints
     assert "Attribute aliases" in format_help_catalog(catalog)
+    assert {item.key for item in catalog.directory_information} == {
+        "current_target", "count_people", "monitor"
+    }
+    assert "Directory information (no model required)" in format_help_catalog(catalog)
     assert catalog.model_dump(mode="json")["version"] == 1
 
 

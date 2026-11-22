@@ -29,6 +29,8 @@ not directory entry values. Search intents follow the AI confirmation preference
 confirmation before application. The model cannot apply changes itself.
 Avoid including passwords or credentials in requests. The in-memory Data Lens log
 records the model and intent category, not the request, prompt, or raw model response.
+The optional, copyable AI explanation describes the validated interpretation and resolution.
+It may display request values and directory details in the window but is not written to the log.
 Target session commands such as `connect to <profile>` are matched locally and
 are not sent to the model; the same in-memory log records them and the saved
 profile names and hosts they report.

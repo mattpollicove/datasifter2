@@ -8,9 +8,22 @@ from ldap3.core.exceptions import (
 )
 
 from datasifter.ai.local_model import ModelOutputError
+from datasifter.datalens.help import get_help_catalog
 from datasifter.directory.service import LDAPImportError, LDAPOperationError, LDAPResultError
 from datasifter.directory.worker import DirectoryWorker
 from datasifter.remediation import DiagnosticCategory, translate_error
+
+
+def test_invalid_model_intent_shows_supported_request_examples():
+    diagnostic = translate_error(ModelOutputError("invalid output"))
+    text = diagnostic.as_text()
+
+    assert "Try one of these supported request examples:" in text
+    for item in get_help_catalog().intents:
+        assert f"{item.operation.capitalize()}: {item.example}" in text
+    for item in get_help_catalog().directory_information:
+        assert item.example in text
+    assert "Help → Data Lens help → Directory information" in text
 
 
 @pytest.mark.parametrize(

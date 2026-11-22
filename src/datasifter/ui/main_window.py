@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -65,7 +65,7 @@ from PyQt6.QtWidgets import (
 )
 
 from datasifter import __version__
-from datasifter.ai.local_model import LlamaCppFilterGenerator, model_sha256
+from datasifter.ai.local_model import LlamaCppFilterGenerator, ModelOutputError, model_sha256
 from datasifter.build_info import build_label
 from datasifter.config import (
     ConfigurationError,
@@ -81,6 +81,8 @@ from datasifter.datalens import (
     PreparedIntent,
     PreparedMutation,
     PreparedSearch,
+    ProposedMutationIntent,
+    SearchIntent,
     SearchResult,
     SearchSpec,
     create_adapter,
@@ -88,10 +90,12 @@ from datasifter.datalens import (
     prepare_intent,
 )
 from datasifter.datalens.help import format_help_catalog, get_help_catalog
+from datasifter.datalens.models import is_sensitive
 from datasifter.datalens.service import AuditLogError, DataLensMutationService, LocalAuditLog
 from datasifter.directory.filters import (
     FilterSyntaxError,
     filter_attribute_names,
+    structured_filter,
     validate_filter,
 )
 from datasifter.directory.ldif import LDIFRecord, read_ldif, write_ldif
@@ -104,9 +108,11 @@ from datasifter.security.certificates import (
     certificate_details,
 )
 from datasifter.session_commands import (
+    COUNT_PEOPLE,
     CURRENT_TARGET,
     DISCONNECT,
     LIST_TARGETS,
+    MONITOR,
     SessionCommand,
     SessionCommandError,
     describe_target,
@@ -242,10 +248,13 @@ class LDAPFilterHighlighter(QSyntaxHighlighter):
 
 class ProfileDialog(QDialog):
     def __init__(
-        self, parent: QWidget | None = None, profile: DirectoryProfile | None = None
+        self, parent: QWidget | None = None, profile: DirectoryProfile | None = None,
+        existing_profiles: Sequence[DirectoryProfile] = (),
     ) -> None:
         super().__init__(parent)
         self._original_profile = profile
+        self._existing_profiles = existing_profiles
+        self.save_as = False
         self._profile_id = profile.profile_id if profile else str(uuid4())
         self._test_worker: DirectoryWorker | None = None
         self.trusted_certificate: bytes | None = None
@@ -323,11 +332,24 @@ class ProfileDialog(QDialog):
         self.test_status.setWordWrap(True)
         layout.addRow(self.test_status)
         layout.addRow(self.cancel_test_button)
+        if profile is not None:
+            copy_notice = QLabel(
+                "Save As does not copy saved credentials or certificate trust. "
+                "Enter new credentials if needed."
+            )
+            copy_notice.setWordWrap(True)
+            layout.addRow(copy_notice)
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
-        self.buttons.accepted.connect(self.accept)
+        self.buttons.accepted.connect(self._accept_save)
         self.buttons.rejected.connect(self.reject)
+        self.save_as_button: QPushButton | None = None
+        if profile is not None:
+            self.save_as_button = self.buttons.addButton(
+                "Save As...", QDialogButtonBox.ButtonRole.ActionRole
+            )
+            self.save_as_button.clicked.connect(self._accept_save_as)
         layout.addRow(self.buttons)
         self.test_network_button.clicked.connect(lambda: self._test_settings(False))
         self.test_authentication_button.clicked.connect(lambda: self._test_settings(True))
@@ -382,11 +404,31 @@ class ProfileDialog(QDialog):
         self.show_password.setEnabled(simple)
         self.save_password.setEnabled(simple)
 
+    def _accept_save(self) -> None:
+        self.save_as = False
+        self.accept()
+
+    def _accept_save_as(self) -> None:
+        self.save_as = True
+        self.accept()
+
     def accept(self) -> None:
         if self._test_worker is not None:
             return
         try:
-            self.profile = self._profile_from_fields()
+            profile = self._profile_from_fields()
+            if self.save_as:
+                profile = replace(
+                    profile, profile_id=str(uuid4()),
+                    tofu_fingerprint=profile.tofu_fingerprint if self.trusted_certificate else "",
+                )
+            if any(
+                existing.name.strip().casefold() == profile.name.strip().casefold()
+                and existing.profile_id != profile.profile_id
+                for existing in self._existing_profiles
+            ):
+                raise ValueError("A profile with this name already exists. Choose a different name.")
+            self.profile = profile
         except (ValueError, TypeError) as error:
             QMessageBox.warning(self, "Invalid profile", str(error))
             return
@@ -495,6 +537,8 @@ class ProfileDialog(QDialog):
         self.test_authentication_button.setEnabled(False)
         self.cancel_test_button.setEnabled(True)
         self.buttons.button(QDialogButtonBox.StandardButton.Save).setEnabled(False)
+        if self.save_as_button is not None:
+            self.save_as_button.setEnabled(False)
         self.test_status.setText("Testing authentication..." if authentication else "Testing TCP...")
         QThreadPool.globalInstance().start(worker)
 
@@ -549,6 +593,8 @@ class ProfileDialog(QDialog):
         self.test_authentication_button.setEnabled(True)
         self.cancel_test_button.setEnabled(False)
         self.buttons.button(QDialogButtonBox.StandardButton.Save).setEnabled(True)
+        if self.save_as_button is not None:
+            self.save_as_button.setEnabled(True)
 
     def _cancel_test(self) -> None:
         if self._test_worker:
@@ -578,8 +624,10 @@ class ProfileDialog(QDialog):
 class ProfileWizard(ProfileDialog):
     """Guide new profile creation while reusing profile diagnostics and validation."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
+    def __init__(
+        self, parent: QWidget | None = None, existing_profiles: Sequence[DirectoryProfile] = ()
+    ) -> None:
+        super().__init__(parent, existing_profiles=existing_profiles)
         self.setWindowTitle("New directory connection")
         form = self.layout()
         assert isinstance(form, QFormLayout)
@@ -696,6 +744,46 @@ class CommandReviewDialog(QDialog):
 
     def reviewed_command(self) -> str:
         return self.command.text().strip()
+
+
+class SuggestedQueryDialog(QDialog):
+    def __init__(self, filter_expression: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Suggested LDAP query")
+        self.resize(560, 190)
+        layout = QVBoxLayout(self)
+        layout.addWidget(
+            QLabel(
+                "Data Lens could not interpret the request. This LDAP filter was derived "
+                "from its simple search wording; review it before use."
+            )
+        )
+        self.filter_edit = QLineEdit(filter_expression)
+        self.filter_edit.setReadOnly(True)
+        layout.addWidget(self.filter_edit)
+        self.instructions = QLabel(
+            "To use it manually, copy the filter, paste it into the Directory Workbench "
+            "LDAP filter field, and click Search."
+        )
+        self.instructions.setWordWrap(True)
+        layout.addWidget(self.instructions)
+        buttons = QHBoxLayout()
+        self.try_button = QPushButton("Try updated query")
+        self.copy_button = QPushButton("Copy filter")
+        self.close_button = QPushButton("Close")
+        buttons.addWidget(self.try_button)
+        buttons.addWidget(self.copy_button)
+        buttons.addWidget(self.close_button)
+        layout.addLayout(buttons)
+        self.try_button.clicked.connect(self.accept)
+        self.copy_button.clicked.connect(self._copy_filter)
+        self.close_button.clicked.connect(self.reject)
+
+    def _copy_filter(self) -> None:
+        QGuiApplication.clipboard().setText(self.filter_edit.text())
+        self.instructions.setText(
+            "Filter copied. Paste it into the Directory Workbench LDAP filter field and click Search."
+        )
 
 
 class MutationReviewDialog(QDialog):
@@ -965,6 +1053,16 @@ class MainWindow(QMainWindow):
             "command results appear here."
         )
         self.ai_output.setMaximumHeight(76)
+        self.show_ai_explanation = QCheckBox("Show AI explanation")
+        self.ai_explanation = QPlainTextEdit()
+        self.ai_explanation.setReadOnly(True)
+        self.ai_explanation.setPlaceholderText(
+            "The validated interpretation and resolution steps will appear here."
+        )
+        self.ai_explanation.setMaximumHeight(140)
+        self.ai_explanation.setVisible(False)
+        self.show_ai_explanation.toggled.connect(self.ai_explanation.setVisible)
+        self.model_status_label = QLabel()
         self.model_status = QLabel()
         self.model_status.setWordWrap(True)
         self.ai_panel = QWidget()
@@ -973,6 +1071,8 @@ class MainWindow(QMainWindow):
         ai_layout.addWidget(self.ai_request)
         ai_layout.addWidget(self.ai_generate)
         ai_layout.addWidget(self.ai_output)
+        ai_layout.addWidget(self.show_ai_explanation)
+        ai_layout.addWidget(self.ai_explanation)
         ai_layout.addWidget(self.model_status)
         self._refresh_model_status()
 
@@ -1069,8 +1169,10 @@ class MainWindow(QMainWindow):
         self.tabs = tabs
         self.setCentralWidget(tabs)
         self.statusBar().showMessage("No directory connected")
+        self.statusBar().addPermanentWidget(self.model_status_label)
         self.version_label = QLabel(f"Version {__version__}")
         self.statusBar().addPermanentWidget(self.version_label)
+        self._update_model_status_bar()
 
         directory_menu = self.menuBar().addMenu("Directory")
         self.import_ldif_action = directory_menu.addAction(
@@ -1204,20 +1306,19 @@ class MainWindow(QMainWindow):
         preferences = self.configuration.preferences
         request = self.ai_request.toPlainText().strip()
         session_command = parse_session_command(request)
-        approved = bool(
-            preferences.model_path and preferences.model_sha256 and preferences.model_provenance
-            and Path(preferences.model_path).suffix.casefold() == ".gguf"
-        )
+        approved = self._model_is_approved()
         reason = ""
         if session_command is not None:
             if not preferences.ai_enabled:
                 reason = "Enable Data Lens in Application settings."
             elif self._workers and session_command.action != DISCONNECT:
                 reason = "Wait for active operations to finish."
+            elif session_command.action in (COUNT_PEOPLE, MONITOR) and (
+                self._active_profile is None or self._connecting
+            ):
+                reason = "Connect to a directory first."
         elif not preferences.ai_enabled:
             reason = "Enable Data Lens in Application settings."
-        elif not approved:
-            reason = "Select and approve a local GGUF model in Application settings."
         elif self._workers:
             reason = "Wait for active operations to finish."
         elif self._active_profile is None or self._connecting:
@@ -1240,6 +1341,48 @@ class MainWindow(QMainWindow):
             self._settings_dialog.set_busy(
                 bool(self._workers), preferences.ai_enabled, approved
             )
+
+    def _model_is_approved(self) -> bool:
+        preferences = self.configuration.preferences
+        return bool(
+            preferences.model_path and preferences.model_sha256 and preferences.model_provenance
+            and Path(preferences.model_path).suffix.casefold() == ".gguf"
+        )
+
+    def _model_is_loaded(self) -> bool:
+        preferences = self.configuration.preferences
+        return self._loaded_model is not None and self._loaded_model[:2] == (
+            preferences.model_path, preferences.model_sha256
+        )
+
+    def _confirm_model_start(self) -> bool:
+        if not self._model_is_approved():
+            response = QMessageBox.question(
+                self, "Local model unavailable",
+                "No approved local GGUF model is selected. Open Application settings "
+                "to select and approve one?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if response == QMessageBox.StandardButton.Yes:
+                self._open_settings()
+            return False
+        response = QMessageBox.question(
+            self, "Start local model?",
+            f"The local model {Path(self.configuration.preferences.model_path).name} "
+            "is not loaded. Load it now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return response == QMessageBox.StandardButton.Yes
+
+    def _prompt_model_on_startup(self) -> None:
+        if (
+            self.isVisible() and self.configuration.preferences.ai_enabled
+            and not self._model_is_loaded() and not self._workers
+            and self._confirm_model_start()
+        ):
+            self._load_model()
 
     def _refresh_connection_controls(self) -> None:
         connected = self._active_profile is not None and not self._connecting
@@ -1502,7 +1645,7 @@ class MainWindow(QMainWindow):
             self._session_passwords[profile.profile_id] = password
 
     def _add_profile(self) -> None:
-        dialog = ProfileWizard(self)
+        dialog = ProfileWizard(self, self.configuration.profiles)
         if dialog.exec() != QDialog.DialogCode.Accepted or dialog.profile is None:
             return
         profile = dialog.profile
@@ -1552,7 +1695,7 @@ class MainWindow(QMainWindow):
             and not self._confirm_leave_entry()
         ):
             return
-        dialog = ProfileDialog(self, profile)
+        dialog = ProfileDialog(self, profile, self.configuration.profiles)
         try:
             saved_password = self.vault.get_password(profile)
             dialog.password.setText(
@@ -1569,15 +1712,30 @@ class MainWindow(QMainWindow):
             return
         index = self.configuration.profiles.index(profile)
         updated = dialog.profile
-        self.configuration.profiles[index] = updated
+        if dialog.save_as:
+            self.configuration.profiles.append(updated)
+        else:
+            self.configuration.profiles[index] = updated
         try:
             self._save_profile_configuration(dialog, updated)
         except (ConfigurationError, CertificateTrustError) as error:
-            self.configuration.profiles[index] = profile
+            if dialog.save_as:
+                self.configuration.profiles.remove(updated)
+            else:
+                self.configuration.profiles[index] = profile
             QMessageBox.critical(self, "Profile not saved", str(error))
             return
         try:
-            if updated.authentication_mode == "simple":
+            if dialog.save_as:
+                if updated.authentication_mode == "simple" and dialog.password.isModified():
+                    self._save_profile_password(
+                        updated, dialog.password.text(), dialog.save_password.isChecked()
+                    )
+                if dialog.client_key_passphrase.isModified():
+                    self.vault.store_client_key_passphrase(
+                        updated, dialog.client_key_passphrase.text()
+                    )
+            elif updated.authentication_mode == "simple":
                 self._save_profile_password(
                     updated,
                     dialog.password.text(),
@@ -1585,13 +1743,18 @@ class MainWindow(QMainWindow):
                 )
             else:
                 self._save_profile_password(updated, "", False)
-            self.vault.store_client_key_passphrase(updated, dialog.client_key_passphrase.text())
+            if not dialog.save_as:
+                self.vault.store_client_key_passphrase(
+                    updated, dialog.client_key_passphrase.text()
+                )
         except ConfigurationError as error:
             QMessageBox.critical(
                 self, "Credential update failed",
                 f"Profile settings were saved, but credentials were not fully updated: {error}",
             )
-        if self._active_profile and self._active_profile.profile_id == updated.profile_id:
+        if not dialog.save_as and self._active_profile and (
+            self._active_profile.profile_id == updated.profile_id
+        ):
             self.data_lens_tab.set_service(None)
             self._active_profile = None
             self._connecting = False
@@ -1678,6 +1841,12 @@ class MainWindow(QMainWindow):
     def _save_profile_configuration(
         self, dialog: ProfileDialog, profile: DirectoryProfile
     ) -> None:
+        if any(
+            item.profile_id != profile.profile_id
+            and item.name.strip().casefold() == profile.name.strip().casefold()
+            for item in self.configuration.profiles
+        ):
+            raise ConfigurationError("A profile with this name already exists. Choose a different name.")
         if not dialog.trusted_certificate:
             self.store.save(self.configuration)
             return
@@ -3028,11 +3197,181 @@ class MainWindow(QMainWindow):
             return f"{previous}Connection to {profile.name} was cancelled."
         return f"{previous}Connecting to {describe_target(profile)}…"
 
+    def _run_directory_information(self, action: str) -> None:
+        self._refresh_lens_controls()
+        profile = self._active_profile
+        if not self.ai_generate.isEnabled() or profile is None:
+            QMessageBox.information(self, "Data Lens", self.ai_generate.toolTip())
+            return
+        if action == COUNT_PEOPLE:
+            self._count_people(profile)
+        else:
+            self._show_monitor(profile)
+
+    def _count_people(self, profile: DirectoryProfile) -> None:
+        if not profile.base_dn:
+            QMessageBox.information(
+                self, "Choose a starting location",
+                "Set a directory starting location in the connection profile first. "
+                "See Help → Data Lens help → Directory information for people counts.",
+            )
+            return
+        locations = ["The profile's starting location and everything below it"]
+        if self._selected_dn and self._selected_dn.casefold() != profile.base_dn.casefold():
+            label = self._selected_item.text(0) if self._selected_item else self._selected_dn
+            locations.append(f"The selected location: {label}")
+        choice, accepted = QInputDialog.getItem(
+            self, "Count people", "Where should I start? Select a location in the "
+            "directory tree first to count only that location.", locations, 0, False
+        )
+        if not accepted:
+            return
+        base_dn = self._selected_dn if choice != locations[0] else profile.base_dn
+        if not base_dn:
+            return
+        try:
+            password = self._profile_password(profile)
+        except ConfigurationError as error:
+            QMessageBox.critical(self, "Credential error", str(error))
+            return
+        self.ai_output.setPlainText("Counting visible people; this may take some time.")
+
+        def operation(cancelled: Event, progress: Callable[[int, str], None]) -> int:
+            service = self._service(profile, password)
+            adapter = create_adapter(service, detect_backend(service, cancelled))
+            return service.count_entries(base_dn, adapter.user_filter(), cancelled, progress)
+
+        def completed(count: int) -> None:
+            self.ai_output.setPlainText(
+                f"Counted {count} people visible to this account under {base_dn}.\n"
+                "This covers the selected location only. Permissions may hide entries, "
+                "and the directory may change during the count."
+            )
+
+        self._run_worker(operation, completed, on_failure=self._directory_information_error)
+
+    def _monitor_credentials(
+        self, active: DirectoryProfile
+    ) -> tuple[DirectoryProfile, str | None] | None:
+        profiles = [
+            profile for profile in self.configuration.profiles
+            if profile.profile_id != active.profile_id
+            and profile.host.casefold() == active.host.casefold()
+            and profile.port == active.port
+            and profile.transport == active.transport
+        ]
+        options = ["Current connection", "One-time credentials"] + [
+            f"Saved profile: {profile.name} ({profile.profile_id})" for profile in profiles
+        ]
+        choice, accepted = QInputDialog.getItem(
+            self, "Monitoring access",
+            "Choose access for this read-only monitoring request:", options, 0, False
+        )
+        if not accepted:
+            return None
+        if choice == options[1]:
+            if active.transport == "plain" and QMessageBox.warning(
+                self, "Unencrypted connection",
+                "This connection sends the monitoring password unencrypted. "
+                "Continue only on an approved non-production test network.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            ) != QMessageBox.StandardButton.Yes:
+                return None
+            bind_dn, accepted = QInputDialog.getText(
+                self, "Monitoring account", "Enter the monitoring account's bind identity:"
+            )
+            if not accepted:
+                return None
+            if not bind_dn.strip():
+                QMessageBox.warning(self, "Monitoring account", "A bind identity is required.")
+                return None
+            password, accepted = QInputDialog.getText(
+                self, "Monitoring password", "Enter the password for this request only:",
+                QLineEdit.EchoMode.Password,
+            )
+            if not accepted:
+                return None
+            if not password:
+                QMessageBox.warning(self, "Monitoring password", "A password is required.")
+                return None
+            return replace(active, authentication_mode="simple", bind_dn=bind_dn.strip()), password
+        selected = active if choice == options[0] else profiles[options.index(choice) - 2]
+        try:
+            password = self._profile_password(selected)
+        except ConfigurationError as error:
+            QMessageBox.critical(self, "Credential error", str(error))
+            return None
+        if selected.authentication_mode == "simple" and not password:
+            password, accepted = QInputDialog.getText(
+                self, "Monitoring password", f"Enter the bind password for {selected.name}:",
+                QLineEdit.EchoMode.Password,
+            )
+            if not accepted:
+                return None
+            if not password:
+                QMessageBox.warning(self, "Monitoring password", "A password is required.")
+                return None
+        return selected, password
+
+    def _show_monitor(self, active: DirectoryProfile) -> None:
+        credentials = self._monitor_credentials(active)
+        if credentials is None:
+            return
+        profile, password = credentials
+        self.ai_output.setPlainText("Reading directory monitoring statistics.")
+
+        def operation(cancelled: Event, progress: Callable[[int, str], None]) -> list[dict[str, Any]]:
+            return self._service(profile, password).search(
+                "cn=monitor", "(objectClass=*)", attributes=["*", "+"],
+                cancelled=cancelled, progress=progress, max_entries=201,
+            )
+
+        def completed(entries: list[dict[str, Any]]) -> None:
+            lines = ["Numeric statistics available under cn=monitor:"]
+            for entry in entries[:200]:
+                stats = []
+                for name, values in entry["attributes"].items():
+                    if not is_sensitive(name):
+                        stats.extend(
+                            f"  {name}: {value}" for value in values
+                            if str(value).strip().lstrip("-").isdigit()
+                        )
+                if stats:
+                    lines.append(str(entry["dn"]))
+                    lines.extend(stats)
+            if len(lines) == 1:
+                lines.append(
+                    "No numeric statistics were returned. Monitoring may be unavailable "
+                    "or access may be restricted."
+                )
+            if len(entries) > 200:
+                lines.append("Only the first 200 monitor entries are shown.")
+            lines.append(
+                "See Help → Data Lens help → Directory information for monitoring limitations."
+            )
+            self.ai_output.setPlainText("\n".join(lines))
+
+        self._run_worker(operation, completed, on_failure=self._directory_information_error)
+
+    def _directory_information_error(self, message: str) -> None:
+        detail = f"{message}\n\nSee Help → Data Lens help → Directory information."
+        self.ai_output.setPlainText(detail)
+        self._show_error(detail)
+
     def _generate_filter(self) -> None:
         request = self.ai_request.toPlainText().strip()
+        self.ai_explanation.clear()
         session_command = parse_session_command(request)
         if session_command is not None:
-            self._run_session_command(request, session_command)
+            if session_command.action in (COUNT_PEOPLE, MONITOR):
+                self.ai_output.clear()
+                self._run_directory_information(session_command.action)
+            else:
+                self._run_session_command(request, session_command)
+            self.ai_explanation.setPlainText(
+                "This session command was matched locally; no AI model was used."
+            )
             return
         self._refresh_lens_controls()
         if not self.ai_generate.isEnabled():
@@ -3041,6 +3380,12 @@ class MainWindow(QMainWindow):
         profile = self._active_profile
         if profile is None:
             QMessageBox.information(self, "Not connected", "Connect to a directory first.")
+            return
+        if (not self._model_is_approved() or not self._model_is_loaded()) and (
+            not self._confirm_model_start()
+        ):
+            return
+        if self._active_profile is not profile or self._workers:
             return
         model_path = self.configuration.preferences.model_path
         model_sha256_expected = self.configuration.preferences.model_sha256
@@ -3057,8 +3402,11 @@ class MainWindow(QMainWindow):
         selected_attributes = tuple(self._known_attributes)
         self.ai_output.clear()
         model_name = Path(model_path).name if model_path else "(no model configured)"
+        suggested_filter: str | None = None
+        generator_used: LlamaCppFilterGenerator | None = None
 
         def operation(cancelled: Event, _progress: Callable[[int, str], None]) -> IntentOperationResult:
+            nonlocal suggested_filter, generator_used
             if cancelled.is_set():
                 raise LDAPOperationError("Data Lens request cancelled.")
             service = self._service(profile, password)
@@ -3075,13 +3423,28 @@ class MainWindow(QMainWindow):
                 generator = loaded[2]
             else:
                 generator = LlamaCppFilterGenerator(model_path, model_sha256_expected)
+            generator_used = generator
             with model_lock:
-                intent = generator.generate_intent(
-                    request,
-                    list(object_classes),
-                    list(attribute_names),
-                    cancelled=cancelled,
-                )
+                try:
+                    intent = generator.generate_intent(
+                        request,
+                        list(object_classes),
+                        list(attribute_names),
+                        cancelled=cancelled,
+                    )
+                except ModelOutputError:
+                    words = request.split(maxsplit=1)
+                    if words and words[0].casefold() in {
+                        "find", "show", "list", "get", "search", "display"
+                    }:
+                        candidate = structured_filter(request, attribute_names)
+                        if candidate is not None:
+                            try:
+                                validate_filter(candidate)
+                            except FilterSyntaxError:
+                                candidate = None
+                        suggested_filter = candidate
+                    raise
             if isinstance(intent, ClarifyIntent):
                 prepared = intent
             else:
@@ -3096,12 +3459,35 @@ class MainWindow(QMainWindow):
             if current.ai_enabled and (
                 current.model_path, current.model_sha256
             ) == (model_path, model_sha256_expected) and self._active_profile is profile:
+                if generator_used is not None:
+                    self._loaded_model = (model_path, model_sha256_expected, generator_used)
+                    self._refresh_model_status()
+                self.ai_explanation.setPlainText(
+                    self._explain_lens_result(result.intent, result.prepared, profile)
+                )
                 self._display_intent_result(profile, result.prepared)
                 self._log_structured_intent(model_name, result.intent.intent)
 
         def failed(message: str) -> None:
+            current = self.configuration.preferences
+            if generator_used is not None and current.ai_enabled and (
+                current.model_path, current.model_sha256
+            ) == (model_path, model_sha256_expected) and self._active_profile is profile:
+                self._loaded_model = (model_path, model_sha256_expected, generator_used)
+                self._refresh_model_status()
             self._log_structured_intent(model_name, "unavailable")
-            self._show_error(message)
+            self.ai_explanation.setPlainText(
+                "The request failed before a validated interpretation was available."
+                + (
+                    "\nA separate simple-search rule suggested an LDAP filter; "
+                    "review it because it may not capture the complete request."
+                    if suggested_filter is not None else ""
+                )
+            )
+            if suggested_filter is None:
+                self._show_error(message)
+            else:
+                self._offer_suggested_query(suggested_filter)
 
         self._run_worker(
             operation,
@@ -3117,6 +3503,68 @@ class MainWindow(QMainWindow):
         for prompt in clarifications:
             lines.append(prompt.question)
             lines.extend(f"  - {option.label}" for option in prompt.options)
+        return "\n".join(lines)
+
+    @staticmethod
+    def _explain_lens_result(
+        intent: DirectoryIntent, prepared: PreparedIntent, profile: DirectoryProfile
+    ) -> str:
+        lines = [
+            "Validated interpretation and resolution (not the model's internal reasoning).",
+            f"Model intent: {intent.intent}.",
+        ]
+        if isinstance(prepared, ClarifyIntent):
+            lines.extend([
+                f"Clarification required ({prepared.reason.value}):",
+                prepared.question,
+            ])
+        elif isinstance(prepared, PreparedSearch):
+            if isinstance(intent, SearchIntent):
+                lines.append(f"Requested entry kind: {intent.kind.value}.")
+                if len(intent.conditions) > 1:
+                    lines.append(
+                        f"Conditions combined with {'AND' if intent.match_all else 'OR'}."
+                    )
+                for condition in intent.conditions:
+                    value = f" {condition.value!r}" if condition.value is not None else ""
+                    negate = "NOT " if condition.negate else ""
+                    lines.append(
+                        f"Condition: {negate}{condition.term} {condition.operator.value}{value}."
+                    )
+            if prepared.ready and prepared.spec is not None:
+                spec = prepared.spec
+                lines.extend([
+                    f"Resolved LDAP filter: {spec.filter}",
+                    f"Base: {spec.base_dn or profile.base_dn or '(server default)'}",
+                    (
+                        f"Scope: {spec.scope.value}; attributes: {', '.join(spec.attributes)}; "
+                        f"maximum results: {spec.size_limit}."
+                    ),
+                    "This is the proposed filter before any review edits.",
+                ])
+            else:
+                lines.extend([
+                    "The resolver needs clarification:",
+                    MainWindow._clarification_text(prepared.clarifications),
+                ])
+        elif isinstance(prepared, PreparedMutation):
+            if isinstance(intent, ProposedMutationIntent):
+                lines.append(f"Proposed operation: {intent.mutation.operation}.")
+            if prepared.clarifications:
+                lines.extend([
+                    "The resolver needs clarification:",
+                    MainWindow._clarification_text(prepared.clarifications),
+                ])
+            if prepared.preview is not None:
+                lines.append(f"Dry-run preview: {prepared.preview.summary}")
+                lines.extend(
+                    f"{issue.severity.value.upper()}: {issue.message}"
+                    for issue in prepared.preview.issues
+                )
+                lines.append(
+                    "Preview checks passed." if prepared.ready else "Preview is blocked."
+                )
+            lines.append("A directory change requires explicit confirmation.")
         return "\n".join(lines)
 
     def _display_intent_result(
@@ -3365,6 +3813,17 @@ class MainWindow(QMainWindow):
             self.filter_edit.setPlainText(dialog.reviewed_command())
             self._execute_filter()
 
+    def _offer_suggested_query(self, filter_expression: str) -> None:
+        self.ai_output.setPlainText(
+            "The local model returned an invalid structured intent.\n\n"
+            f"Suggested LDAP filter:\n{filter_expression}\n\n"
+            "Choose Try updated query to review and run it, or copy it into the "
+            "Directory Workbench filter field and click Search."
+        )
+        dialog = SuggestedQueryDialog(filter_expression, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._review_generated_filter(filter_expression)
+
     def _set_confirmation_preference(self, enabled: bool) -> None:
         previous = self.configuration.preferences.require_ai_confirmation
         self.configuration.preferences.require_ai_confirmation = enabled
@@ -3566,7 +4025,7 @@ class MainWindow(QMainWindow):
             self.model_status.setText(
                 f"Verified source (operator-attested): {preferences.model_provenance}\n"
                 f"SHA-256: {preferences.model_sha256}\n"
-                + ("Loaded in memory and ready." if loaded else "Not loaded; loads on first use.")
+                + ("Loaded in memory and ready." if loaded else "Not loaded; prompts on first use.")
             )
         if not preferences.ai_enabled:
             self.model_status.setText("Data Lens is disabled.\n" + self.model_status.text())
@@ -3574,7 +4033,34 @@ class MainWindow(QMainWindow):
             self._settings_dialog.model_status.setText(
                 f"Model: {preferences.model_path or '(none)'}\n{self.model_status.text()}"
             )
+        self._update_model_status_bar()
         self._refresh_lens_controls()
+
+    def _update_model_status_bar(self) -> None:
+        preferences = self.configuration.preferences
+        if not preferences.model_path:
+            text = "Model: no model chosen"
+            tooltip = text
+        else:
+            model_path = Path(preferences.model_path)
+            loaded = self._loaded_model is not None and self._loaded_model[:2] == (
+                preferences.model_path,
+                preferences.model_sha256,
+            )
+            if model_path.suffix.casefold() != ".gguf":
+                state = "unsupported format"
+            elif not preferences.model_sha256 or not preferences.model_provenance:
+                state = "approval incomplete"
+            elif not preferences.ai_enabled:
+                state = "Data Lens disabled"
+            elif loaded:
+                state = "loaded"
+            else:
+                state = "not loaded"
+            text = f"Model: {model_path.name} ({state})"
+            tooltip = f"{text}\n{model_path}"
+        self.model_status_label.setText(text)
+        self.model_status_label.setToolTip(tooltip)
 
     def _service(self, profile: DirectoryProfile, password: str | None) -> LDAPService:
         return LDAPService(
@@ -3679,6 +4165,7 @@ class MainWindow(QMainWindow):
 
         self._connection_epoch += 1
         self._cancel_operation()
+        self.ai_explanation.clear()
         profile = self._active_profile
         self._active_profile = None
         self._connecting = False

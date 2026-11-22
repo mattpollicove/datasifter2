@@ -128,9 +128,11 @@ translates natural-language requests into validated search, proposed-mutation, o
 intents with the optional local model, and manages the target session. Open **Settings → Application settings**
 for grouped **Data Lens**, **Safety**, and **Appearance** options. Disable Data Lens
 to hide its workspace panel and release the loaded model; re-enable it from the same screen.
-The approved model file is retained, and manual LDAP searches remain available. **Run request**
-is enabled after a model is selected and approved, a directory is connected, a request is entered,
-and active operations have finished. A search is resolved to a typed LDAP search and follows the
+The approved model file is retained, and manual LDAP searches remain available. At startup and
+before an AI request, Data Lens offers to load an approved model if it is not already loaded,
+or to open settings if no approved model is selected. Declining does not disable manual searches
+or target-session commands. **Run request** is enabled when a directory is connected, a request
+is entered, and active operations have finished. A search is resolved to a typed LDAP search and follows the
 AI confirmation preference (on by default). A mutation is resolved to a typed dry-run preview;
 the request field applies it only after explicit confirmation, regardless of search preferences.
 The separate Directory Workbench controls retain their own confirmation flows. Press **Enter** to run the request;
@@ -141,6 +143,11 @@ Ambiguous or incomplete requests return a clarification instead of choosing a ta
 attribute. The model may misunderstand a request; review every search proposal and dry-run
 preview. Do not include passwords or other credentials in natural-language requests. Use the
 explicit credential form when a password is required.
+
+Select **Show AI explanation** to see and copy the model's validated intent and the resolver's
+search or dry-run details. This is a description of the result, not the model's internal
+reasoning; it may contain request values and directory details and is held only in the window.
+The displayed search is the proposal before any review edits.
 
 **Help → Data Lens help** lists supported requests, example phrases, effective built-in aliases,
 backend differences, and safety constraints in copyable text. Examples illustrate intent and
@@ -156,12 +163,20 @@ locally against the whole request and never use the model, so no model needs to 
 | `disconnect` | Ends the current session, like the **Disconnect** button. |
 | `list targets` | Lists saved profiles and marks the connected and last connected ones. |
 | `current target` | Shows the connected profile, its base DN, and whether it is read-only. |
+| `What directory am I connected to?` | Shows the same connection details. |
+| `How many people in the directory?` or `count people` | Choose the profile's starting location or a selected tree location and count visible person accounts below it. |
+| `Show directory stats` | Read numeric statistics under `cn=monitor` when available. Choose current access, a saved profile for the same endpoint, or one-time credentials. |
 
 A profile is matched by name, then host, then a unique part of its name; an ambiguous or unknown
 name is reported without changing the session. One target is connected at a time. Unsaved
 attribute changes and active operations still prompt before a session ends, and a missing bind
 password is still requested. Results appear below the request and in the **Data Lens log**.
 Searches and mutation previews stay unavailable until a connection has succeeded.
+Directory information results appear below the request, not in the Data Lens log. Counts use
+the current account's visibility and the backend's person filter; access restrictions may hide
+entries, and a count is not a snapshot. A failed or unsupported paged search is not reported as
+an exact count. Monitoring shows up to 200 entries and does not implement vendor-specific APIs.
+One-time monitoring credentials are not saved and use the active profile's transport settings.
 
 Choose a local GGUF model with **Choose GGUF file** in application settings (or
 **Settings → Data Lens → Choose local GGUF model**). DataSifter asks you to
@@ -234,7 +249,7 @@ Existing files are never overwritten. After downloading or selecting a model, th
 source-attestation and integrity-check flow is still required before inference.
 **Load model into memory after download or selection** (checked by default) loads the approved
 model right after attestation, so the first AI request starts immediately; the AI panel then
-reports "Loaded in memory and ready." Uncheck it to load the model on first use instead. The
+reports "Loaded in memory and ready." Uncheck it to be prompted to load on first use instead. The
 loaded model is reused for later requests and released when a different model is approved.
 Model selection and source approval are saved independently of the settings screen's Save/Cancel
 buttons. Other settings are applied together only on Save; Cancel leaves them unchanged.
@@ -250,6 +265,11 @@ kept in the OS keyring. Profiles support anonymous, simple bind, and TLS-protect
 Use **Add profile** to open the connection wizard: enter connection and authentication details,
 optionally configure TLS and run connection checks, then choose a Base DN and save. Use **Back**
 to revise an earlier step. Select a saved profile and choose **Edit profile** to edit it in one dialog.
+Use **Save As** in the editor to create a separate profile with a unique name. Names are
+case-insensitively unique after trimming whitespace; profiles may otherwise share settings.
+Saved passwords, client-key passphrases, and profile-scoped TOFU trust are not copied.
+Newly entered credentials follow the editor's existing storage choices, and certificate trust
+may need to be established again for the new profile.
 DataSifter selects the last successfully connected profile when it starts and uses it if you click
 **Connect** with no profile selected. It does not reconnect automatically.
 New profiles default to **Simple bind**; choose another authentication mode when needed. **List

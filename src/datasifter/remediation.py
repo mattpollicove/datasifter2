@@ -195,10 +195,26 @@ def translate_error(error: Exception) -> ActionableDiagnostic:
                 ("Check supported object classes, attribute names, and value syntax in the schema inspector.",),
             )
         if isinstance(current, ModelOutputError):
+            from datasifter.datalens.help import get_help_catalog
+
+            catalog = get_help_catalog()
+            examples = tuple(
+                f"{item.operation.capitalize()}: {item.example}"
+                for item in catalog.intents
+            )
+            local_examples = tuple(item.example for item in catalog.directory_information)
             return ActionableDiagnostic(
                 DiagnosticCategory.MODEL, "model_output",
                 "The local model returned an invalid structured intent.",
-                ("Rephrase the request with one operation and explicit names; try another approved GGUF model if needed.",),
+                (
+                    "Rephrase the request with one operation and explicit names.",
+                    "Try one of these supported request examples:",
+                    *examples,
+                    "Directory information commands work without a model:",
+                    *local_examples,
+                    "See Help → Data Lens help → Directory information for details.",
+                    "If it continues, try another approved GGUF model.",
+                ),
             )
         if isinstance(current, LocalModelError):
             return ActionableDiagnostic(

@@ -21,6 +21,49 @@ def test_dn_depth_ignores_escaped_commas():
     assert _dn_depth(r"cn=Last\, First,ou=People,dc=example") == 3
 
 
+def test_count_entries_checks_all_pages_and_server_errors(monkeypatch):
+    profile = DirectoryProfile(name="test", host="ldap.test", base_dn="dc=test")
+    service = LDAPService(profile, None)
+
+    class FakeConnection:
+        def __init__(self, pages):
+            self.pages = iter(pages)
+            self.entries = []
+            self.result = {}
+            self.request = {}
+
+        def search(self, **kwargs):
+            assert kwargs["attributes"] == ["1.1"]
+            self.entries, self.result = next(self.pages)
+            return bool(self.entries)
+
+    def page(count, cookie):
+        return [object()] * count, {
+            "result": 0,
+            "controls": {"1.2.840.113556.1.4.319": {"value": {"cookie": cookie}}},
+        }
+
+    connection = FakeConnection([page(2, b"next"), page(1, b"")])
+
+    @contextmanager
+    def context(*_args):
+        yield connection
+
+    monkeypatch.setattr(service, "_connection", context)
+    assert service.count_entries("dc=test", "(objectClass=person)") == 3
+    connection.pages = iter([page(0, b"")])
+    assert service.count_entries("dc=test", "(objectClass=person)") == 0
+    connection.pages = iter([([], {"result": 4, "description": "size limit exceeded"})])
+    with pytest.raises(LDAPResultError):
+        service.count_entries("dc=test", "(objectClass=person)")
+    connection.pages = iter([([object()], {"result": 0})])
+    with pytest.raises(LDAPOperationError, match="paged results"):
+        service.count_entries("dc=test", "(objectClass=person)")
+    connection.pages = iter([([], {"result": 0, "referrals": ["ldap://other"]})])
+    with pytest.raises(LDAPOperationError, match="referrals"):
+        service.count_entries("dc=test", "(objectClass=person)")
+
+
 def test_read_only_profile_blocks_mutations_before_connecting(monkeypatch):
     profile = DirectoryProfile(name="readonly", host="ldap.test", read_only=True)
     service = LDAPService(profile, None)

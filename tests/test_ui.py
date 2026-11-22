@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from datasifter import __version__
+from datasifter.ai.local_model import ModelOutputError
 from datasifter.build_info import build_label
 from datasifter.config import (
     ConfigurationError,
@@ -33,6 +34,7 @@ from datasifter.ui.main_window import (
     MainWindow,
     ProfileDialog,
     ProfileWizard,
+    SuggestedQueryDialog,
 )
 
 
@@ -42,8 +44,27 @@ def test_ui_displays_current_build_version(qtbot, tmp_path):
     assert window.windowTitle() == f"DataSifter 2.0 - v{__version__} ({build_label()})"
     assert build_label().startswith("source 20")
     assert window.version_label.text() == f"Version {__version__}"
+    assert window.model_status_label.text() == "Model: no model chosen"
     window.statusBar().showMessage("Operation failed")
     assert window.version_label.text() == f"Version {__version__}"
+    window.close()
+
+
+def test_status_bar_shows_selected_model_and_load_state(qtbot, tmp_path):
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    preferences = window.configuration.preferences
+    preferences.model_path = str(tmp_path / "approved.gguf")
+    preferences.model_sha256 = "a" * 64
+    preferences.model_provenance = "Test catalog"
+
+    window._refresh_model_status()
+    assert window.model_status_label.text() == "Model: approved.gguf (not loaded)"
+    assert str(tmp_path / "approved.gguf") in window.model_status_label.toolTip()
+
+    window._loaded_model = (preferences.model_path, preferences.model_sha256, object())
+    window._refresh_model_status()
+    assert window.model_status_label.text() == "Model: approved.gguf (loaded)"
     window.close()
 
 
@@ -505,11 +526,11 @@ def test_lens_requires_approved_model_and_rejects_disabled_ai(qtbot, tmp_path, m
     qtbot.addWidget(window)
     window._active_profile = DirectoryProfile(name="test", host="ldap.test")
     window.ai_request.setPlainText("surname starts with b")
-    assert not window.ai_generate.isEnabled()
+    assert window.ai_generate.isEnabled()
     preferences = window.configuration.preferences
     preferences.model_path = str(tmp_path / "approved.gguf")
     window._refresh_model_status()
-    assert not window.ai_generate.isEnabled()
+    assert window.ai_generate.isEnabled()
     preferences.model_sha256 = "a" * 64
     preferences.model_provenance = "Test catalog"
     window._refresh_model_status()
@@ -527,6 +548,109 @@ def test_lens_requires_approved_model_and_rejects_disabled_ai(qtbot, tmp_path, m
     window.close()
 
 
+def test_startup_offers_settings_or_loads_approved_model(qtbot, tmp_path, monkeypatch):
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    window.show()
+    prompts = []
+    monkeypatch.setattr(
+        QMessageBox, "question",
+        lambda *_args: prompts.append(_args[2]) or QMessageBox.StandardButton.Yes,
+    )
+    actions = []
+    monkeypatch.setattr(window, "_open_settings", lambda: actions.append("settings"))
+    monkeypatch.setattr(window, "_load_model", lambda: actions.append("load"))
+
+    window._prompt_model_on_startup()
+    assert actions == ["settings"]
+    preferences = window.configuration.preferences
+    preferences.model_path = str(tmp_path / "approved.gguf")
+    preferences.model_sha256 = "a" * 64
+    preferences.model_provenance = "Test catalog"
+    window._prompt_model_on_startup()
+    assert actions == ["settings", "load"]
+    assert "not loaded" in prompts[-1]
+    window._loaded_model = (preferences.model_path, preferences.model_sha256, object())
+    window._prompt_model_on_startup()
+    preferences.ai_enabled = False
+    window._loaded_model = None
+    window._prompt_model_on_startup()
+    assert actions == ["settings", "load"]
+    window.close()
+
+
+def test_declining_model_load_keeps_request_without_starting_worker(qtbot, tmp_path, monkeypatch):
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    preferences = window.configuration.preferences
+    preferences.model_path = str(tmp_path / "approved.gguf")
+    preferences.model_sha256 = "a" * 64
+    preferences.model_provenance = "Test catalog"
+    window._active_profile = DirectoryProfile(name="test", host="ldap.test")
+    request = "find users with surname starting with s"
+    window.ai_request.setPlainText(request)
+    prompts = []
+    monkeypatch.setattr(
+        QMessageBox, "question",
+        lambda *_args: prompts.append(_args[2]) or QMessageBox.StandardButton.No,
+    )
+    monkeypatch.setattr(
+        window, "_run_worker", lambda *_args, **_kwargs: pytest.fail("Model must not start")
+    )
+
+    window._generate_filter()
+    window._generate_filter()
+
+    assert len(prompts) == 2
+    assert window.ai_request.toPlainText() == request
+    assert window._loaded_model is None
+    window.close()
+
+
+def test_accepted_request_load_is_reused_for_later_requests(qtbot, tmp_path, monkeypatch):
+    from datasifter.datalens import ClarifyIntent
+
+    created = []
+    prompts = []
+
+    class FakeGenerator:
+        def __init__(self, path, sha256):
+            created.append((path, sha256))
+
+        def generate_intent(self, *_args, **_kwargs):
+            return ClarifyIntent(intent="clarify", question="Which users?")
+
+    class FakeService:
+        def schema_options(self, _cancelled):
+            return {"object_classes": {}, "attributes": ["sn"]}
+
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    preferences = window.configuration.preferences
+    preferences.model_path = str(tmp_path / "approved.gguf")
+    preferences.model_sha256 = "a" * 64
+    preferences.model_provenance = "Test catalog"
+    window._active_profile = DirectoryProfile(name="test", host="ldap.test")
+    monkeypatch.setattr(main_window_module, "LlamaCppFilterGenerator", FakeGenerator)
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: None)
+    monkeypatch.setattr(window, "_service", lambda *_args: FakeService())
+    monkeypatch.setattr(
+        QMessageBox, "question",
+        lambda *_args: prompts.append(_args[2]) or QMessageBox.StandardButton.Yes,
+    )
+    window.ai_request.setPlainText("find users")
+
+    for _ in range(2):
+        window._generate_filter()
+        qtbot.waitUntil(lambda: not window._workers)
+
+    assert len(prompts) == 1
+    assert created == [(preferences.model_path, preferences.model_sha256)]
+    assert window._model_is_loaded()
+    assert "Which users?" in window.ai_output.toPlainText()
+    window.close()
+
+
 def test_command_rewrite_requires_approved_model(qtbot, tmp_path):
     window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
     qtbot.addWidget(window)
@@ -540,7 +664,7 @@ def test_command_rewrite_requires_approved_model(qtbot, tmp_path):
 def test_main_request_uses_structured_intent_without_logging_request(
     qtbot, tmp_path, monkeypatch
 ):
-    from datasifter.datalens import ClarifyIntent, DirectoryBackend
+    from datasifter.datalens import CreateProposal, DirectoryBackend, ProposedMutationIntent
 
     window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
     qtbot.addWidget(window)
@@ -555,9 +679,11 @@ def test_main_request_uses_structured_intent_without_logging_request(
     class FakeGenerator:
         def generate_intent(self, text, classes, attributes, cancelled=None):
             generated.append((text, classes, attributes))
-            return ClarifyIntent(
-                intent="clarify",
-                question="Use the explicit entry form to handle credentials.",
+            return ProposedMutationIntent(
+                intent="proposed_mutation",
+                mutation=CreateProposal(
+                    operation="create", name="mattp", attributes={"password": "example"}
+                ),
             )
 
     class FakeService:
@@ -582,6 +708,8 @@ def test_main_request_uses_structured_intent_without_logging_request(
 
     assert generated[0][0] == request
     assert "Clarification needed" in window.ai_output.toPlainText()
+    assert "Use the explicit entry form" in window.ai_explanation.toPlainText()
+    assert "example" not in window.ai_explanation.toPlainText()
     assert "password is example" not in window.ai_prompt_log.toPlainText()
     assert "raw model output are not retained" in window.ai_prompt_log.toPlainText()
     window.close()
@@ -632,6 +760,10 @@ def test_mutation_intent_displays_dry_run_without_applying(
     qtbot.waitUntil(lambda: not window._workers)
 
     assert "no change was applied" in window.ai_output.toPlainText()
+    explanation = window.ai_explanation.toPlainText()
+    assert "Proposed operation: delete." in explanation
+    assert "Dry-run preview:" in explanation
+    assert "requires explicit confirmation" in explanation
     assert directory.read(ADA) is not None
     audit = (tmp_path / "logs" / "datalens-audit.jsonl").read_text(encoding="utf-8")
     assert '"outcome":"declined"' in audit
@@ -828,11 +960,14 @@ def test_session_commands_report_targets_and_disconnect(qtbot, tmp_path, monkeyp
         window, "_connect_profile", lambda _profile: pytest.fail("Must not connect")
     )
     window._active_profile = first
+    window.ai_explanation.setPlainText("stale interpretation")
 
     assert _run_lens_request(window, "list targets") == (
         "first — first.ldap.test:389 (plain, anonymous) [connected]\n"
         "second — second.ldap.test:389 (plain, anonymous) [last connected]"
     )
+    assert "no AI model was used" in window.ai_explanation.toPlainText()
+    assert "stale interpretation" not in window.ai_explanation.toPlainText()
     assert _run_lens_request(window, "current target") == (
         "Connected to first — first.ldap.test:389 (plain, anonymous); "
         "base DN dc=first; writable."
@@ -850,6 +985,106 @@ def test_session_commands_report_targets_and_disconnect(qtbot, tmp_path, monkeyp
     assert _run_lens_request(window, "show current session") == (
         "No target is connected. Last connected: second."
     )
+    window._disconnect()
+    assert not window.ai_explanation.toPlainText()
+    window.close()
+
+
+def test_people_count_uses_selected_location_without_a_model(qtbot, tmp_path, monkeypatch):
+    window, profile, _second = _session_window(qtbot, tmp_path)
+    window._active_profile = profile
+    window._selected_dn = "ou=People,dc=first"
+    monkeypatch.setattr(
+        QInputDialog, "getItem", lambda _parent, _title, _label, items, *_args: (items[-1], True)
+    )
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: None)
+    calls = []
+
+    class Service:
+        def count_entries(self, base, expression, _cancelled, _progress):
+            calls.append((base, expression))
+            return 7
+
+    class Adapter:
+        def user_filter(self):
+            return "(objectClass=person)"
+
+    monkeypatch.setattr(window, "_service", lambda *_args: Service())
+    monkeypatch.setattr(main_window_module, "detect_backend", lambda *_args: "test")
+    monkeypatch.setattr(main_window_module, "create_adapter", lambda *_args: Adapter())
+    _run_lens_request(window, "How many people in the directory?")
+    qtbot.waitUntil(lambda: not window._workers)
+    assert calls == [("ou=People,dc=first", "(objectClass=person)")]
+    assert "7 people visible" in window.ai_output.toPlainText()
+    assert "Permissions may hide entries" in window.ai_output.toPlainText()
+    assert "no AI model" in window.ai_explanation.toPlainText()
+    assert "ou=People" not in window.ai_prompt_log.toPlainText()
+    window.close()
+
+
+def test_monitor_uses_one_time_credentials_and_does_not_log_values(qtbot, tmp_path, monkeypatch):
+    window, profile, _second = _session_window(qtbot, tmp_path)
+    profile.transport = "starttls"
+    window._active_profile = profile
+    monkeypatch.setattr(
+        QInputDialog, "getItem", lambda _parent, _title, _label, items, *_args: (items[1], True)
+    )
+    monkeypatch.setattr(
+        QInputDialog, "getText",
+        lambda _parent, title, *_args: ("cn=monitor-admin", True)
+        if title == "Monitoring account" else ("temporary-secret", True),
+    )
+    calls = []
+
+    class Service:
+        def search(self, base, _filter, **kwargs):
+            calls.append((base, kwargs["max_entries"]))
+            return [{
+                "dn": "cn=monitor",
+                "attributes": {"connections": ["42"], "userPassword": ["1234"]},
+            }]
+
+    def service(selected, password):
+        assert selected is not profile
+        assert selected.bind_dn == "cn=monitor-admin"
+        assert password == "temporary-secret"
+        return Service()
+
+    monkeypatch.setattr(window, "_service", service)
+    _run_lens_request(window, "Show directory stats")
+    qtbot.waitUntil(lambda: not window._workers)
+    assert calls == [("cn=monitor", 201)]
+    assert "connections: 42" in window.ai_output.toPlainText()
+    assert "1234" not in window.ai_output.toPlainText()
+    assert "temporary-secret" not in window.ai_prompt_log.toPlainText()
+    assert profile.authentication_mode == "anonymous"
+    assert not window._session_passwords
+    window.close()
+
+
+def test_monitor_can_use_saved_same_endpoint_profile(qtbot, tmp_path, monkeypatch):
+    window, profile, _second = _session_window(qtbot, tmp_path)
+    monitor = DirectoryProfile(
+        name="monitor", host=profile.host, port=profile.port, transport=profile.transport,
+        authentication_mode="simple", bind_dn="cn=monitor-admin",
+    )
+    window.configuration.profiles.append(monitor)
+    monkeypatch.setattr(
+        QInputDialog, "getItem", lambda _parent, _title, _label, items, *_args: (items[-1], True)
+    )
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: "saved-secret")
+    assert window._monitor_credentials(profile) == (monitor, "saved-secret")
+    window.close()
+
+
+def test_directory_information_errors_reference_help(qtbot, tmp_path, monkeypatch):
+    window, _profile, _second = _session_window(qtbot, tmp_path)
+    errors = []
+    monkeypatch.setattr(window, "_show_error", errors.append)
+    window._directory_information_error("Monitoring denied.")
+    assert "Monitoring denied" in errors[0]
+    assert "Help → Data Lens help → Directory information" in errors[0]
+    assert "Monitoring denied" in window.ai_output.toPlainText()
     window.close()
 
 
@@ -936,7 +1171,10 @@ def test_mutation_request_requires_approved_model_in_structured_flow(
     request = "add phone number to mattp 732 555 1212"
     window.ai_request.setPlainText(request)
     messages = []
-    monkeypatch.setattr(QMessageBox, "information", lambda *_args: messages.append(_args[2]))
+    monkeypatch.setattr(
+        QMessageBox, "question",
+        lambda *_args: messages.append(_args[2]) or QMessageBox.StandardButton.No,
+    )
     monkeypatch.setattr(
         window.data_lens_tab,
         "_parse_and_execute",
@@ -948,10 +1186,10 @@ def test_mutation_request_requires_approved_model_in_structured_flow(
         lambda *_args, **_kwargs: pytest.fail("An unapproved model must not run"),
     )
 
-    assert not window.ai_generate.isEnabled()
+    assert window.ai_generate.isEnabled()
     assert window.ai_generate.text() == "Run request"
     window._generate_filter()
-    assert "Select and approve a local GGUF" in messages[0]
+    assert "No approved local GGUF model" in messages[0]
     window.close()
 
 
@@ -1614,6 +1852,18 @@ def test_approved_model_loads_after_download_and_is_reused(qtbot, tmp_path, monk
         qtbot.waitUntil(lambda: not window._workers)
     assert len(reviewed) == 2
     assert all(isinstance(item, PreparedSearch) for item in reviewed)
+    explanation = window.ai_explanation.toPlainText()
+    assert "not the model's internal reasoning" in explanation
+    assert "Condition: name equals 'a'." in explanation
+    assert "Resolved LDAP filter: (cn=a)" in explanation
+    assert window.ai_explanation.isHidden()
+    window.show_ai_explanation.setChecked(True)
+    assert not window.ai_explanation.isHidden()
+    assert window.ai_explanation.isReadOnly()
+    window.ai_explanation.selectAll()
+    assert "Resolved LDAP filter: (cn=a)" in window.ai_explanation.textCursor().selectedText()
+    window.show_ai_explanation.setChecked(False)
+    assert window.ai_explanation.isHidden()
     assert created == [str(model_path)]
     assert schema_requests == [True]
     assert received[-1] == (["inetOrgPerson"], ["telephoneNumber"])
@@ -1644,6 +1894,9 @@ def test_failed_intent_generation_is_reported_without_logging_request(
             return {"object_classes": {}, "attributes": ["st"]}
 
     monkeypatch.setattr("datasifter.ui.main_window.LlamaCppFilterGenerator", FakeGenerator)
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *_args: QMessageBox.StandardButton.Yes
+    )
     window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
     qtbot.addWidget(window)
     window.configuration.preferences.model_path = str(tmp_path / "approved.gguf")
@@ -1661,6 +1914,73 @@ def test_failed_intent_generation_is_reported_without_logging_request(
     assert "Request: people in pa" not in log
     assert "raw model output are not retained" in log
     assert errors == ["invalid structured intent"]
+    assert window._loaded_model is not None
+    assert "failed before a validated interpretation" in window.ai_explanation.toPlainText()
+    window.close()
+
+
+def test_invalid_intent_offers_derived_search_filter(qtbot, tmp_path, monkeypatch):
+    class FakeGenerator:
+        def generate_intent(self, *_args, **_kwargs):
+            raise ModelOutputError("invalid structured intent")
+
+    class FakeService:
+        def schema_options(self, _cancelled):
+            return {"object_classes": {}, "attributes": ["sn"]}
+
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    preferences = window.configuration.preferences
+    preferences.model_path = str(tmp_path / "approved.gguf")
+    preferences.model_sha256 = "a" * 64
+    preferences.model_provenance = "Test catalog"
+    window._loaded_model = (preferences.model_path, preferences.model_sha256, FakeGenerator())
+    window._active_profile = DirectoryProfile(name="lab", host="ldap.test")
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: "secret")
+    monkeypatch.setattr(window, "_service", lambda *_args: FakeService())
+    suggestions = []
+    monkeypatch.setattr(window, "_offer_suggested_query", suggestions.append)
+    window.ai_request.setPlainText("Find all people who have a last name starting with s")
+
+    window._generate_filter()
+    qtbot.waitUntil(lambda: not window._workers)
+
+    assert suggestions == ["(sn=s*)"]
+    assert "separate simple-search rule" in window.ai_explanation.toPlainText()
+    assert "Find all people" not in window.ai_prompt_log.toPlainText()
+    window.close()
+
+
+def test_suggested_query_dialog_copies_filter_and_describes_manual_use(qtbot):
+    from PyQt6.QtGui import QGuiApplication
+
+    dialog = SuggestedQueryDialog("(sn=s*)")
+    qtbot.addWidget(dialog)
+    dialog.copy_button.click()
+
+    assert QGuiApplication.clipboard().text() == "(sn=s*)"
+    assert "paste it into the directory workbench" in dialog.instructions.text().casefold()
+    dialog.close()
+
+
+def test_trying_suggested_query_uses_existing_review_flow(qtbot, tmp_path, monkeypatch):
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    reviewed = []
+
+    class AcceptedDialog:
+        def __init__(self, _filter_expression, _parent):
+            pass
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(main_window_module, "SuggestedQueryDialog", AcceptedDialog)
+    monkeypatch.setattr(window, "_review_generated_filter", reviewed.append)
+    window._offer_suggested_query("(sn=s*)")
+
+    assert reviewed == ["(sn=s*)"]
+    assert "(sn=s*)" in window.ai_output.toPlainText()
     window.close()
 
 
@@ -1678,7 +1998,7 @@ def test_approved_model_without_load_option_is_not_loaded(qtbot, tmp_path, monke
 
     assert window._loaded_model is None
     assert window.configuration.preferences.model_path == str(model_path)
-    assert "loads on first use" in window.model_status.text()
+    assert "prompts on first use" in window.model_status.text()
     window.close()
 
 
@@ -2277,6 +2597,136 @@ def test_edit_profile_preserves_identity_and_masks_password(qtbot):
     dialog.host.setText("other.test")
     dialog.accept()
     assert dialog.profile.tofu_fingerprint == ""
+
+
+def test_profile_names_must_be_unique_for_add_edit_and_save_as(qtbot, monkeypatch):
+    first = DirectoryProfile(name="Lab", host="ldap.test", base_dn="dc=test")
+    second = DirectoryProfile(name="Other", host="ldap.test", base_dn="dc=test")
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda _p, _t, text: warnings.append(text))
+
+    wizard = ProfileWizard(existing_profiles=[first, second])
+    qtbot.addWidget(wizard)
+    wizard.name.setText("  lAb  ")
+    wizard.host.setText("ldap.test")
+    wizard.authentication_mode.setCurrentIndex(wizard.authentication_mode.findData("anonymous"))
+    wizard.base_dn.setEditText("dc=test")
+    wizard._show_step(2)
+    wizard.accept()
+    assert wizard.profile is None
+
+    dialog = ProfileDialog(profile=first, existing_profiles=[first, second])
+    qtbot.addWidget(dialog)
+    dialog.name.setText(" OTHER ")
+    dialog.accept()
+    assert dialog.profile is None
+    dialog.name.setText("lab")
+    assert dialog.save_as_button is not None
+    dialog.save_as_button.click()
+    assert dialog.profile is None
+    assert len(warnings) == 3
+    assert all("already exists" in text for text in warnings)
+    dialog.name.setText("New name")
+    dialog.save_as_button.click()
+    assert dialog.profile is not None
+    assert dialog.profile.profile_id != first.profile_id
+    assert dialog.profile.host == first.host
+
+
+def test_save_as_preserves_original_and_does_not_copy_secrets_or_tofu(qtbot, tmp_path, monkeypatch):
+    profile = DirectoryProfile(
+        name="original", host="ldap.test", base_dn="dc=test", transport="starttls",
+        authentication_mode="simple", bind_dn="cn=admin", tofu_fingerprint="ab" * 32,
+    )
+    store = ConfigurationStore(tmp_path / "profiles.json")
+    store.save(LocalConfiguration(profiles=[profile]))
+
+    class Vault:
+        def __init__(self):
+            self.writes = []
+
+        def get_password(self, _profile):
+            return "original-secret"
+
+        def get_client_key_passphrase(self, _profile):
+            return "original-passphrase"
+
+        def store_password(self, target, password):
+            self.writes.append((target.profile_id, password))
+
+        def store_client_key_passphrase(self, target, passphrase):
+            self.writes.append((target.profile_id, passphrase))
+
+    vault = Vault()
+    window = MainWindow(store=store, vault=vault)
+    qtbot.addWidget(window)
+    window._active_profile = window._selected_profile()
+
+    def save_as(dialog):
+        assert dialog.password.text() == "original-secret"
+        dialog.name.setText("copy")
+        dialog.save_as_button.click()
+        return dialog.result()
+
+    monkeypatch.setattr(ProfileDialog, "exec", save_as)
+    window.edit_profile_button.click()
+    original, copied = store.load().profiles
+    assert original == profile
+    assert copied.name == "copy"
+    assert copied.profile_id != profile.profile_id
+    assert copied.tofu_fingerprint == ""
+    assert vault.writes == []
+    assert copied.profile_id not in window._session_passwords
+    assert window._active_profile.profile_id == profile.profile_id
+    assert window._selected_profile().profile_id == copied.profile_id
+    window.close()
+
+
+def test_save_as_stores_only_newly_entered_credentials(qtbot, tmp_path, monkeypatch):
+    profile = DirectoryProfile(
+        name="original", host="ldap.test", base_dn="dc=test",
+        authentication_mode="simple", bind_dn="cn=admin",
+    )
+    store = ConfigurationStore(tmp_path / "profiles.json")
+    store.save(LocalConfiguration(profiles=[profile]))
+
+    class Vault:
+        def __init__(self):
+            self.writes = []
+
+        def get_password(self, _profile):
+            return "original-secret"
+
+        def get_client_key_passphrase(self, _profile):
+            return "original-passphrase"
+
+        def store_password(self, target, password):
+            self.writes.append((target.profile_id, password))
+
+        def store_client_key_passphrase(self, target, passphrase):
+            self.writes.append((target.profile_id, passphrase))
+
+    vault = Vault()
+    window = MainWindow(store=store, vault=vault)
+    qtbot.addWidget(window)
+
+    def save_as(dialog):
+        dialog.name.setText("copy")
+        dialog.password.setText("new-secret")
+        dialog.password.setModified(True)
+        dialog.client_key_passphrase.setText("new-passphrase")
+        dialog.client_key_passphrase.setModified(True)
+        dialog.save_as_button.click()
+        return dialog.result()
+
+    monkeypatch.setattr(ProfileDialog, "exec", save_as)
+    window.edit_profile_button.click()
+    copied = store.load().profiles[1]
+    assert vault.writes == [
+        (copied.profile_id, "new-secret"), (copied.profile_id, "new-passphrase")
+    ]
+    assert "secret" not in store.path.read_text()
+    window.close()
 
 
 def test_bind_password_enabled_only_for_simple_authentication(qtbot):

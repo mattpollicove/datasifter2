@@ -56,6 +56,7 @@ def test_schema_context_contains_only_structural_metadata():
     ("request_text", "expected"),
     [
         ("show all entries with lastname starting with the letter b", "(sn=b*)"),
+        ("Find all people who have a last name starting with s", "(sn=s*)"),
         ("last name starts with B", "(sn=B*)"),
         ("surname beginning with letter b", "(sn=b*)"),
         ("sn begins with the letters Mc", "(sn=Mc*)"),

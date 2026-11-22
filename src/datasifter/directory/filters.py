@@ -270,7 +270,7 @@ _STOP_WORDS = frozenset(
         "a", "an", "the", "show", "find", "list", "get", "search", "display", "give", "me",
         "all", "any", "entries", "entry", "users", "user", "people", "person", "records",
         "record", "objects", "number", "numbers", "value", "values", "or", "with", "in", "of",
-        "for", "whose", "where", "that", "have", "has", "having", "is", "are",
+        "for", "who", "whose", "where", "that", "have", "has", "having", "is", "are",
     }
 )
 _ALWAYS_VALID = frozenset({"objectclass", "ou", "dc", "o", "cn"})

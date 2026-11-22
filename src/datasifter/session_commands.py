@@ -16,6 +16,8 @@ CONNECT = "connect"
 DISCONNECT = "disconnect"
 LIST_TARGETS = "list"
 CURRENT_TARGET = "status"
+COUNT_PEOPLE = "count_people"
+MONITOR = "monitor"
 
 _PREFIX = r"^\s*(?:please\s+)?"
 _SUFFIX = r"\s*[.!?]*\s*$"
@@ -32,6 +34,10 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
             r"(?:show\s+)?(?:the\s+)?(?:current|active)\s+(?:target|session)",
         ),
         (CURRENT_TARGET, r"(?:target|session)\s+status"),
+        (CURRENT_TARGET, r"what\s+directory\s+am\s+i\s+connected\s+to"),
+        (COUNT_PEOPLE, r"(?:how\s+many\s+(?:people|users)(?:\s+are)?\s+in\s+the\s+directory|count\s+(?:people|users))"),
+        (MONITOR, r"(?:show\s+)?(?:directory\s+)?(?:stats|statistics|monitoring)(?:\s*\(\s*cn\s*=\s*monitor\s*\))?"),
+        (MONITOR, r"show\s+(?:the\s+)?(?:directory\s+)?monitor"),
     )
 )
 _TARGET_KEYWORD = re.compile(r"^(?:the\s+)?(?:profile|target|directory)\s+(.+)$", re.IGNORECASE)

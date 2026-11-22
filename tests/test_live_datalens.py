@@ -34,7 +34,7 @@ from datasifter.datalens import (
     detect_backend,
 )
 from datasifter.datalens.service import DataLensMutationService, LocalAuditLog
-from datasifter.directory.service import LDAPOperationError, LDAPService
+from datasifter.directory.service import LDAPOperationError, LDAPResultError, LDAPService
 
 pytestmark = pytest.mark.live
 
@@ -142,6 +142,32 @@ def warnings(result) -> set[IssueCode]:
 
 def test_backend_is_detected_from_the_root_dse(target):
     assert detect_backend(target.build_service(target.settings)) is target.backend
+
+
+def test_people_count_uses_live_backend_filter_and_starting_location(target):
+    service = target.build_service(target.settings)
+    adapter = target.adapter()
+    before = service.count_entries(target.sandbox, adapter.user_filter())
+    name = f"count-{uuid.uuid4().hex[:8]}"
+    dn = target.child(name)
+    service.add_entry(dn, {**target.person(), "cn": [name]})
+    try:
+        assert service.count_entries(target.sandbox, adapter.user_filter()) == before + 1
+    finally:
+        service.delete_entry(dn)
+
+
+def test_monitor_read_when_available_on_live_ldap(live_settings, build_live_service):
+    service = build_live_service(live_settings)
+    try:
+        entries = service.search(
+            "cn=monitor", "(objectClass=*)", attributes=["*", "+"], max_entries=201
+        )
+    except LDAPResultError as error:
+        if error.result_code in (32, 50):
+            pytest.skip("The live LDAP target does not expose cn=monitor to this account.")
+        raise
+    assert entries, "cn=monitor returned no visible entries"
 
 
 def test_entry_lifecycle_through_typed_operations(target):

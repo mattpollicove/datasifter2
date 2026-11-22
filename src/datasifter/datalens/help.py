@@ -20,9 +20,16 @@ class BackendHelp(DataLensModel):
     differences: tuple[str, ...]
 
 
+class DirectoryInformationHelp(DataLensModel):
+    key: Literal["current_target", "count_people", "monitor"]
+    example: str
+    description: str
+
+
 class HelpCatalog(DataLensModel):
     version: Literal[1] = 1
     intents: tuple[IntentHelp, ...]
+    directory_information: tuple[DirectoryInformationHelp, ...]
     aliases: tuple[AttributeConcept, ...]
     backends: tuple[BackendHelp, ...]
     safety_constraints: tuple[str, ...]
@@ -50,6 +57,29 @@ def get_help_catalog(registry: AliasRegistry | None = None) -> HelpCatalog:
             IntentHelp(intent="clarify", operation="clarify",
                        description="Ask for missing or ambiguous information.",
                        example="Create a user."),
+        ),
+        directory_information=(
+            DirectoryInformationHelp(
+                key="current_target", example="What directory am I connected to?",
+                description="Shows the connected profile and its starting location without a model.",
+            ),
+            DirectoryInformationHelp(
+                key="count_people", example="How many people in the directory?",
+                description=(
+                    "Choose the profile's starting location or a location selected in the tree. "
+                    "Counts visible person accounts in that subtree; permissions can hide entries. "
+                    "The count uses the backend's person filter and requires paged LDAP results."
+                ),
+            ),
+            DirectoryInformationHelp(
+                key="monitor", example="Show directory stats",
+                description=(
+                    "Reads numeric statistics under cn=monitor where supported and accessible. "
+                    "Choose current access, a saved profile for the same endpoint, or one-time "
+                    "credentials. Other monitoring APIs are not supported. Statistics are "
+                    "limited to the first 200 monitor entries."
+                ),
+            ),
         ),
         aliases=registry.concepts(),
         backends=(
@@ -84,6 +114,9 @@ def format_help_catalog(catalog: HelpCatalog) -> str:
     lines = ["Data Lens help", "", "Examples (model interpretations may vary):"]
     for item in catalog.intents:
         lines.append(f"- {item.operation}: {item.example}")
+    lines.extend(["", "Directory information (no model required):"])
+    for item in catalog.directory_information:
+        lines.append(f"- {item.example} {item.description}")
     lines.extend(["", "Backend differences:"])
     for backend in catalog.backends:
         lines.append(f"- {backend.backend.value}:")

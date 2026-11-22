@@ -544,6 +544,63 @@ class LDAPService:
         )
         return results
 
+    def count_entries(
+        self,
+        base_dn: str,
+        filter_expression: str,
+        cancelled: Event | None = None,
+        progress: Callable[[int, str], None] | None = None,
+    ) -> int:
+        """Count visible entries through a complete paged search without fetching attributes."""
+        from datasifter.directory.filters import validate_filter
+
+        validate_filter(filter_expression)
+        total = 0
+        cookie = None
+        with self._connection(cancelled) as connection:
+            while True:
+                _raise_if_cancelled(cancelled)
+                try:
+                    connection.search(
+                        search_base=base_dn,
+                        search_filter=filter_expression,
+                        search_scope=SUBTREE,
+                        attributes=["1.1"],
+                        paged_size=500,
+                        paged_cookie=cookie,
+                    )
+                finally:
+                    _log_protocol_request(
+                        "searchRequest", connection, base=base_dn,
+                        filter=_redact_filter_values(filter_expression), scope="SUBTREE",
+                        attributes=["1.1"], page_size=500,
+                        page_cookie="<present>" if cookie else "",
+                    )
+                _raise_if_cancelled(cancelled)
+                if connection.result.get("result") != 0:
+                    raise self._result_error(connection, "People count failed")
+                if connection.result.get("referrals") or any(
+                    item.get("type") == "searchResRef"
+                    for item in (getattr(connection, "response", None) or [])
+                ):
+                    raise LDAPOperationError(
+                        "The directory returned referrals; the count may be incomplete."
+                    )
+                total += len(connection.entries)
+                if progress:
+                    progress(0, f"Counted {total} visible entries")
+                controls = connection.result.get("controls") or {}
+                page_control = controls.get("1.2.840.113556.1.4.319")
+                if not isinstance(page_control, dict) or not isinstance(
+                    page_control.get("value"), dict
+                ) or "cookie" not in page_control["value"]:
+                    raise LDAPOperationError(
+                        "The directory did not confirm paged results; the count may be incomplete."
+                    )
+                cookie = page_control["value"]["cookie"]
+                if not cookie:
+                    return total
+
     def search_page(
         self,
         base_dn: str,

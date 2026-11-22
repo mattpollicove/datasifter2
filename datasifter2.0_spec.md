@@ -32,7 +32,7 @@ and known limitations; specification targets are not compatibility certification
 * **Task Cancellation & Progress:** Real-time progress indicators, status updates, and cancellation tokens to safely abort long-running tasks.
 
 ### 2.2 Secure Credential Storage & Local Configuration
-* **Connection creation:** A guided wizard collects connection and authentication details, offers optional network and authentication checks and TLS configuration, and lets the user select or enter a discovered Base DN before saving. Existing profiles remain editable in a single dialog.
+* **Connection creation:** A guided wizard collects connection and authentication details, offers optional network and authentication checks and TLS configuration, and lets the user select or enter a discovered Base DN before saving. Existing profiles remain editable in a single dialog, with Save As creating a separately identified profile. Names must be unique ignoring case and surrounding whitespace. Saved credentials and profile-scoped TOFU trust are not copied.
 * **OS-Native Keyring Integration:** Store connection passwords securely via the `keyring` Python library (Windows Credential Manager, macOS Keychain, Freedesktop Secret Service API / KWallet). Zero plain-text password storage on disk.
 * **Local Configuration Store:** Non-sensitive profile metadata (connection endpoints, ports, SSL/TLS preferences, database names, TOFU certificate fingerprints, AI settings, confirmation preferences, and UI states) are stored in structured JSON or lightweight SQLite files within platform-specific user directories:
   * **Windows:** `%APPDATA%\DataSifter\`
@@ -112,7 +112,13 @@ requests, prompts, and model responses are not retained in the Data Lens log. Th
 Directory Workbench mutation controls keep their explicit confirmation flow. SQL assistance
 is planned for product-roadmap Phase 2. Target session commands (connect or switch to a saved
 profile, disconnect, list targets, show the current target) are matched locally without the
-model. One target session is active at a time; switching disconnects and clears the previous
+model. Local directory-information commands also show connection details, count visible people
+under a user-selected starting location, and read numeric statistics from `cn=monitor` when
+available. Counts use backend-specific person filters and completed paged searches; access
+controls may hide entries. Monitoring can use current access, a same-endpoint saved profile, or
+one-time credentials, without changing the active session. Other monitoring APIs are not
+implemented. Help and related errors point to these capabilities and their limitations.
+One target session is active at a time; switching disconnects and clears the previous
 session first. Searches and mutations require an established session. A metadata-only local
 audit file records Data Lens mutation outcomes without requests, DNs, attribute values, or
 credentials. Preview checks are repeated before writing, but LDAP does not make review and
