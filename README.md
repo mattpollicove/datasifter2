@@ -1,5 +1,7 @@
 # DataSifter 2.0
 
+**Source version:** 0.010 | **README updated:** 2026-11-22 14:45:00 -05:00
+
 ## ALPHA CODE / WORK IN PROGRESS
 
 Experimental, actively developed software; not production-ready. Features, configuration
@@ -58,9 +60,8 @@ not mean every operation has been verified against a live server or every listed
 
 ### Testing evidence and current limitations
 
-- Most recent full-suite validation: **536 passed, 1 skipped** on Windows on 2026-11-22.
-  That run skipped the AD password-over-LDAPS test because its port was not configured;
-  a subsequent targeted run passed against the lab's LDAPS endpoint.
+- Most recent full-suite validation: **565 passed** on Windows on 2026-11-22, including
+  the configured live LDAP and Active Directory tests.
 - Automated coverage includes configuration, LDAP service behavior, filters, certificates,
   workers, Qt UI interactions, model approval/download safeguards, and BOM generation.
   Model inference tests use fakes where appropriate; passing them is not a real-model benchmark.
