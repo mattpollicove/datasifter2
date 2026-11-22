@@ -1,0 +1,8 @@
+{
+  "host": "dc.test.example",
+  "ldap_port": 389,
+  "ldaps_port": 636,
+  "bind_dn": "cn=test-admin,cn=Users,dc=example,dc=test",
+  "base_dn": "dc=example,dc=test",
+  "tls_server_name": ""
+}

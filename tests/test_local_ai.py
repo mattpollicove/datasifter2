@@ -7,6 +7,7 @@ import pytest
 from datasifter.ai.local_model import (
     LlamaCppFilterGenerator,
     LocalModelError,
+    ModelOutputError,
     model_sha256,
 )
 
@@ -54,6 +55,51 @@ def test_gguf_hash_covers_header_and_accepts_uppercase_extension(tmp_path):
 
 def fake_llama_cpp(llama):
     return SimpleNamespace(Llama=llama, StoppingCriteriaList=FakeStoppingCriteriaList)
+
+
+def test_rewrite_command_uses_local_model_and_returns_draft(tmp_path, monkeypatch):
+    model_path = tmp_path / "model.gguf"
+    model_path.write_bytes(b"GGUFtest")
+    prompts = []
+
+    class FakeLlama:
+        def __init__(self, **_options):
+            pass
+
+        def __call__(self, prompt, **options):
+            prompts.append(prompt)
+            assert options["stream"]
+            return iter([{"choices": [{"text": "delete entry alexsmith"}]}])
+
+    monkeypatch.setitem(sys.modules, "llama_cpp", fake_llama_cpp(FakeLlama))
+    generator = LlamaCppFilterGenerator(str(model_path), model_sha256(model_path))
+    assert generator.rewrite_command("delete alexsmith") == (
+        "delete entry alexsmith"
+    )
+    assert "invent missing details" in prompts[0]
+    assert "delete alexsmith" in prompts[0]
+    assert "delete entry sam" in prompts[0]
+
+
+def test_rewrite_command_rejects_empty_response_and_cancelled(tmp_path, monkeypatch):
+    model_path = tmp_path / "model.gguf"
+    model_path.write_bytes(b"GGUFtest")
+
+    class FakeLlama:
+        def __init__(self, **_options):
+            pass
+
+        def __call__(self, _prompt, **_options):
+            return iter([])
+
+    monkeypatch.setitem(sys.modules, "llama_cpp", fake_llama_cpp(FakeLlama))
+    generator = LlamaCppFilterGenerator(str(model_path), model_sha256(model_path))
+    with pytest.raises(LocalModelError, match="empty rewrite"):
+        generator.rewrite_command("delete alex")
+    cancelled = Event()
+    cancelled.set()
+    with pytest.raises(LocalModelError, match="cancelled"):
+        generator.rewrite_command("delete alex", cancelled)
 
 
 def test_local_model_prompt_contains_schema_but_not_row_values(tmp_path, monkeypatch):
@@ -394,6 +440,67 @@ def test_model_state_word_is_mapped_and_prompt_lists_aliases(tmp_path, monkeypat
     assert "st = state, province, region" in prompts[0]
     assert "l = city, town, locality, location" in prompts[0]
     assert "\nst\n" in prompts[0]
+
+
+def test_generate_intent_repairs_malformed_json_once(tmp_path, monkeypatch):
+    model_path = tmp_path / "model.gguf"
+    model_path.write_bytes(b"GGUFtest model")
+    prompts = []
+    responses = [
+        '{"intent":"search",',
+        (
+            '{"intent":"search","conditions":[{"term":"email","operator":"contains",'
+            '"value":"example.com"}],"kind":"user"}'
+        ),
+    ]
+
+    class FakeLlama:
+        def __init__(self, **_options):
+            pass
+
+        def __call__(self, prompt, **_options):
+            prompts.append(prompt)
+            return iter([{"choices": [{"text": responses.pop(0)}]}])
+
+    monkeypatch.setitem(sys.modules, "llama_cpp", fake_llama_cpp(FakeLlama))
+    generator = LlamaCppFilterGenerator(str(model_path), model_sha256(model_path))
+
+    intent = generator.generate_intent(
+        "find users with email containing example.com",
+        ["person"],
+        ["cn", "mail", "userPassword"],
+    )
+
+    assert intent.intent == "search"
+    assert intent.conditions[0].term == "email"
+    assert len(prompts) == 2
+    assert "JSON schema:" in prompts[0]
+    assert "userPassword" not in prompts[0]
+    assert "previous response did not match" in prompts[1]
+
+
+def test_generate_intent_surfaces_invalid_output_after_one_repair(tmp_path, monkeypatch):
+    model_path = tmp_path / "model.gguf"
+    model_path.write_bytes(b"GGUFtest model")
+    calls = []
+
+    class FakeLlama:
+        def __init__(self, **_options):
+            pass
+
+        def __call__(self, _prompt, **_options):
+            calls.append(True)
+            return iter([{"choices": [{"text": "delete entry cn=Ada,dc=test"}]}])
+
+    monkeypatch.setitem(sys.modules, "llama_cpp", fake_llama_cpp(FakeLlama))
+    generator = LlamaCppFilterGenerator(str(model_path), model_sha256(model_path))
+
+    with pytest.raises(ModelOutputError, match="after one repair attempt") as failure:
+        generator.generate_intent("delete Ada", ["person"], ["cn"])
+    assert len(calls) == 2
+    from datasifter.remediation import translate_error
+
+    assert translate_error(failure.value).code == "model_output"
 
 
 @pytest.mark.parametrize(

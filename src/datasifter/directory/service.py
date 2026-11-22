@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import socket
 import ssl
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from threading import Event, Thread
 from time import perf_counter
@@ -28,14 +28,28 @@ from ldap3 import (
     Server,
     Tls,
 )
+from ldap3.core.exceptions import LDAPOperationResult
 from ldap3.protocol.rfc4512 import constant_to_class_kind
 
 from datasifter.config import DirectoryProfile
+from datasifter.directory.ldif import LDIFModification, LDIFRecord
 from datasifter.security.certificates import CertificateTrustStore
 
 
 class LDAPOperationError(RuntimeError):
     """Raised for LDAP operation failures with safe, user-facing detail."""
+
+
+class LDAPResultError(LDAPOperationError):
+    """A directory operation failed with an LDAP protocol result code."""
+
+    def __init__(self, message: str, result_code: int | None) -> None:
+        super().__init__(message)
+        self.result_code = result_code
+
+
+class LDAPImportError(LDAPOperationError):
+    """Raised when an LDIF import stops after applying some records."""
 
 
 MODIFY_OPERATIONS = {
@@ -44,6 +58,7 @@ MODIFY_OPERATIONS = {
     "replace": MODIFY_REPLACE,
 }
 protocol_logger = logging.getLogger("datasifter.protocol")
+_UNPARSED_FILTER = "<redacted>"
 
 
 def _dn_depth(distinguished_name: str) -> int:
@@ -62,7 +77,12 @@ def _dn_depth(distinguished_name: str) -> int:
 def _redact_request_value(value: Any, key: str, request_type: str) -> Any:
     normalized_key = key.casefold().replace("_", "")
     if normalized_key == "filter" and isinstance(value, str):
-        return _redact_filter_values(value)
+        try:
+            return _redact_filter_values(value)
+        except ValueError:
+            # ldap3 records extensible-match assertions in its own multi-line form,
+            # which is not RFC 4515 text. Logging must never fail the operation.
+            return _UNPARSED_FILTER
     if normalized_key in {
         "simple",
         "credentials",
@@ -119,6 +139,9 @@ def _log_protocol_request(
             key: _redact_request_value(value, key, str(request["type"]))
             for key, value in request.items()
         }
+        if safe_request.get("filter") == _UNPARSED_FILTER and "filter" in fields:
+            # The caller supplies the filter as written, already redacted.
+            safe_request["filter"] = fields["filter"]
         protocol_logger.info("LDAP request %s", safe_request)
         return
     protocol_logger.info("LDAP request %s", {"operation": operation, **fields})
@@ -293,9 +316,7 @@ class LDAPService:
                     attributes=["*", "+"],
                 )
             if not search_succeeded:
-                raise LDAPOperationError(
-                    self._result_message(connection, "Base DN discovery failed")
-                )
+                raise self._result_error(connection, "Base DN discovery failed")
             _raise_if_cancelled(cancelled)
             contexts: list[str] = []
             for entry in connection.entries:
@@ -401,12 +422,17 @@ class LDAPService:
                     password="<redacted>",
                 )
             if not bind_succeeded:
-                raise LDAPOperationError(self._result_message(connection, "LDAP bind failed"))
+                raise self._result_error(connection, "LDAP bind failed")
             yield connection
         except LDAPOperationError:
             if cancelled and cancelled.is_set():
                 _raise_if_cancelled(cancelled, write_operation)
             raise
+        except LDAPOperationResult as error:
+            if cancelled and cancelled.is_set():
+                _raise_if_cancelled(cancelled, write_operation)
+            code = error.result if isinstance(error.result, int) else None
+            raise LDAPResultError(f"LDAP operation failed: {error}", code) from error
         except Exception as error:
             if cancelled and cancelled.is_set():
                 _raise_if_cancelled(cancelled, write_operation)
@@ -444,6 +470,11 @@ class LDAPService:
         description = connection.result.get("message") or connection.result.get("description")
         return f"{prefix}: {description or 'server returned no detail'}"
 
+    @classmethod
+    def _result_error(cls, connection: Connection, prefix: str) -> LDAPResultError:
+        code = connection.result.get("result")
+        return LDAPResultError(cls._result_message(connection, prefix), code if isinstance(code, int) else None)
+
     def search(
         self,
         base_dn: str,
@@ -453,7 +484,9 @@ class LDAPService:
         page_size: int = 500,
         cancelled: Event | None = None,
         progress: Callable[[int, str], None] | None = None,
+        max_entries: int | None = None,
     ) -> list[dict[str, Any]]:
+        """Return matching entries, stopping after ``max_entries`` when it is given."""
         from datasifter.directory.filters import validate_filter
 
         validate_filter(filter_expression)
@@ -462,6 +495,8 @@ class LDAPService:
             raise ValueError(f"Unsupported LDAP search scope: {scope}")
         if page_size < 1:
             raise ValueError("Page size must be positive.")
+        if max_entries is not None and max_entries < 1:
+            raise ValueError("Maximum entry count must be positive.")
         _raise_if_cancelled(cancelled)
         results: list[dict[str, Any]] = []
         started = perf_counter()
@@ -493,6 +528,10 @@ class LDAPService:
                 results.extend(self._entry_dict(entry) for entry in connection.entries)
                 if progress:
                     progress(0, f"Loaded {len(results)} entries")
+                if max_entries is not None and len(results) >= max_entries:
+                    # Closing the connection abandons the remaining pages on the server.
+                    del results[max_entries:]
+                    break
                 controls = connection.result.get("controls", {})
                 page_control = controls.get("1.2.840.113556.1.4.319", {})
                 cookie = page_control.get("value", {}).get("cookie")
@@ -704,8 +743,12 @@ class LDAPService:
     ) -> None:
         self._ensure_writable()
         _raise_if_cancelled(cancelled, write=True)
-        if not attributes.get("objectClass"):
-            raise ValueError("New entries must include at least one objectClass.")
+        if not any(
+            name.casefold() == "objectclass"
+            and any(value not in ("", b"") for value in values)
+            for name, values in attributes.items()
+        ):
+            raise ValueError("New entries must include a non-empty objectClass value.")
         started = perf_counter()
         with self._connection(cancelled, write_operation=True) as connection:
             _raise_if_cancelled(cancelled, write=True)
@@ -719,7 +762,7 @@ class LDAPService:
                     attributes={name: "<redacted>" for name in attributes},
                 )
             if not added:
-                raise LDAPOperationError(self._result_message(connection, "Unable to add entry"))
+                raise self._result_error(connection, "Unable to add entry")
         self._log_operation("add", started)
 
     def modify_entry(
@@ -753,8 +796,98 @@ class LDAPService:
                     },
                 )
             if not modified:
-                raise LDAPOperationError(self._result_message(connection, "Unable to modify entry"))
+                raise self._result_error(connection, "Unable to modify entry")
         self._log_operation("modify", started)
+
+    def modify_entry_ordered(
+        self,
+        distinguished_name: str,
+        modifications: Sequence[LDIFModification],
+        cancelled: Event | None = None,
+    ) -> None:
+        """Apply LDIF modifications in their declared order."""
+        self._ensure_writable()
+        _raise_if_cancelled(cancelled, write=True)
+        if not modifications:
+            raise ValueError("At least one LDAP modification is required.")
+        started = perf_counter()
+        with self._connection(cancelled, write_operation=True) as connection:
+            for modification in modifications:
+                _raise_if_cancelled(cancelled, write=True)
+                if modification.operation not in MODIFY_OPERATIONS:
+                    raise ValueError(
+                        f"Unsupported LDAP modify operation: {modification.operation}"
+                    )
+                changes = {
+                    modification.attribute: [
+                        (MODIFY_OPERATIONS[modification.operation], list(modification.values))
+                    ]
+                }
+                try:
+                    modified = connection.modify(distinguished_name, changes)
+                finally:
+                    _log_protocol_request(
+                        "modifyRequest",
+                        connection,
+                        dn=distinguished_name,
+                        changes={
+                            modification.attribute: [
+                                (modification.operation, "<redacted>")
+                            ]
+                        },
+                    )
+                if not modified:
+                    raise self._result_error(connection, "Unable to modify entry")
+        self._log_operation("modify", started)
+
+    def apply_ldif_records(
+        self,
+        records: Sequence[LDIFRecord],
+        cancelled: Event | None = None,
+        progress: Callable[[int, str], None] | None = None,
+    ) -> int:
+        """Apply validated LDIF change records in file order."""
+        if not records:
+            return 0
+        self._ensure_writable()
+        total = len(records)
+        applied = 0
+        for index, record in enumerate(records, start=1):
+            try:
+                _raise_if_cancelled(cancelled, write=True)
+                if record.change_type == "add":
+                    self.add_entry(record.dn, record.attributes, cancelled)
+                elif record.change_type == "modify":
+                    self.modify_entry_ordered(
+                        record.dn,
+                        record.modifications,
+                        cancelled,
+                    )
+                elif record.change_type == "delete":
+                    self.delete_entry(record.dn, cancelled=cancelled)
+                elif record.change_type == "modrdn":
+                    if record.new_rdn is None:
+                        raise ValueError("A modrdn record must include newrdn.")
+                    self.move_entry(
+                        record.dn,
+                        record.new_rdn,
+                        new_superior=record.new_superior,
+                        delete_old_rdn=record.delete_old_rdn,
+                        cancelled=cancelled,
+                    )
+                else:
+                    raise ValueError(f"Unsupported LDIF changetype: {record.change_type}")
+            except (LDAPOperationError, ValueError) as error:
+                state = "cancelled" if cancelled and cancelled.is_set() else "failed"
+                raise LDAPImportError(
+                    f"LDIF import {state} at record {index} of {total} "
+                    f"({record.dn}); {applied} complete record(s) were already applied, "
+                    f"and the failing record may be partially applied: {error}"
+                ) from error
+            applied += 1
+            if progress:
+                progress(round(index * 100 / total), f"Applied LDIF record {index} of {total}")
+        return applied
 
     def delete_entry(
         self,
@@ -788,7 +921,7 @@ class LDAPService:
                 finally:
                     _log_protocol_request("deleteRequest", connection, dn=dn)
                 if not deleted:
-                    raise LDAPOperationError(self._result_message(connection, f"Unable to delete {dn}"))
+                    raise self._result_error(connection, f"Unable to delete {dn}")
         self._log_operation("delete", started)
 
     def move_entry(
@@ -821,7 +954,7 @@ class LDAPService:
                     delete_old_rdn=delete_old_rdn,
                 )
             if not modified_dn:
-                raise LDAPOperationError(self._result_message(connection, "Unable to rename/move entry"))
+                raise self._result_error(connection, "Unable to rename/move entry")
         self._log_operation("modifyDN", started)
 
     def change_password(
@@ -851,9 +984,7 @@ class LDAPService:
                     new_password="<redacted>",
                 )
             if not changed:
-                raise LDAPOperationError(
-                    self._result_message(connection, "LDAP Password Modify operation failed")
-                )
+                raise self._result_error(connection, "LDAP Password Modify operation failed")
         self._log_operation("passwordModify", started)
 
     @staticmethod

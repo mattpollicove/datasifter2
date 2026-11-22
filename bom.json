@@ -1,15 +1,15 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:321926b7-3260-4a4c-b19e-871d93d85fef",
+  "serialNumber": "urn:uuid:078fe917-4628-4205-8db7-8b3daebaceb4",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-03T01:37:50.078008+00:00",
+    "timestamp": "2026-11-22T18:30:17.017773+00:00",
     "component": {
       "type": "application",
-      "bom-ref": "datasifter:0.006",
+      "bom-ref": "datasifter:0.010",
       "name": "datasifter",
-      "version": "0.006"
+      "version": "0.010"
     },
     "properties": [
       {
@@ -40,6 +40,24 @@
           "license": {
             "name": "MIT"
           }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/annotated-types@0.8.0",
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "purl": "pkg:pypi/annotated-types@0.8.0",
+      "properties": [
+        {
+          "name": "datasifter:dependency-group",
+          "value": "runtime"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
         }
       ]
     },
@@ -690,6 +708,42 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:pypi/pydantic@2.14.4",
+      "name": "pydantic",
+      "version": "2.14.4",
+      "purl": "pkg:pypi/pydantic@2.14.4",
+      "properties": [
+        {
+          "name": "datasifter:dependency-group",
+          "value": "runtime"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/pydantic-core@2.50.5",
+      "name": "pydantic_core",
+      "version": "2.50.5",
+      "purl": "pkg:pypi/pydantic-core@2.50.5",
+      "properties": [
+        {
+          "name": "datasifter:dependency-group",
+          "value": "runtime"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:pypi/pygments@2.21.0",
       "name": "Pygments",
       "version": "2.21.0",
@@ -1053,11 +1107,33 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:pypi/typing-inspection@0.4.5",
+      "name": "typing-inspection",
+      "version": "0.4.5",
+      "purl": "pkg:pypi/typing-inspection@0.4.5",
+      "properties": [
+        {
+          "name": "datasifter:dependency-group",
+          "value": "runtime"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:pypi/typing-extensions@4.16.0",
       "name": "typing_extensions",
       "version": "4.16.0",
       "purl": "pkg:pypi/typing-extensions@4.16.0",
       "properties": [
+        {
+          "name": "datasifter:dependency-group",
+          "value": "runtime"
+        },
         {
           "name": "datasifter:dependency-group",
           "value": "local-ai"
@@ -1174,7 +1250,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "bebf20201cfa6916f4202447a9fab4cd8accb87b7858feb8614e3419dac723ca"
+          "content": "27c0cfe9151e795b64a6e95c48d5fbea9ac727176844a10ac5acd32f361fa4c2"
         }
       ],
       "properties": [
@@ -1192,6 +1268,23 @@
         {
           "alg": "SHA-256",
           "content": "464c8d2888702dbe8407325187a51676f9d341b248cda9ef2d274516c1c55c6e"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/_build_stamp.py",
+      "name": "src/datasifter/_build_stamp.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1c803079a7c029bd5f5d9e4ceb2803ae012428d798d94311e2f78d5eca9adc0e"
         }
       ],
       "properties": [
@@ -1225,7 +1318,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a35577810e7c24aee0ed638ce0774e33694d94c16153031b591c37d750d81bb8"
+          "content": "fbdc81df546b312aa6ba6316c06b1bd6577e63b0b674aca556db51f1dcedda89"
         }
       ],
       "properties": [
@@ -1293,7 +1386,245 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "cde8527dad22e587fef285c1d3ab2f77b0d3e2482f780ae5cbcdcb1f205d9321"
+          "content": "7a78f64d021a7b293ea18ce79472b2e5a71b1ced3c91fc0aed05f99129a2f0dd"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/__init__.py",
+      "name": "src/datasifter/datalens/__init__.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5b9aaafb31e3da0eb3dbdbc174069ddf5de35d1ec1c174cc3a0a516f0c70e9c2"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/adapters/__init__.py",
+      "name": "src/datasifter/datalens/adapters/__init__.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b908fb32ed8dba8f7fe54d4f26aac29e1a62f60583126783b7529ba28d572a4a"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/adapters/active_directory.py",
+      "name": "src/datasifter/datalens/adapters/active_directory.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e256e358afe510141f09e6033a0929fdc6df16379ca4a2fb9a5a04a0a5271ff5"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/adapters/base.py",
+      "name": "src/datasifter/datalens/adapters/base.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4d8b8d1f85f3a8cae92690c654c5b373ebac87d367f6d29ac13af20e5a8fb62c"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/adapters/standard.py",
+      "name": "src/datasifter/datalens/adapters/standard.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "aca33c757cdf928bbd1116e11bdf6051cb01d5eaa6191b53916e3a2aa034c8cb"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/aliases.py",
+      "name": "src/datasifter/datalens/aliases.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "517d0881841bf9cfd9dd2d02cc5ac4525fd0123c7972d32b10308652127257a3"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/dn.py",
+      "name": "src/datasifter/datalens/dn.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f369f36b05b278b2355c4df47c21d512803b4b6713c2d513a2af7bb489887ea8"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/errors.py",
+      "name": "src/datasifter/datalens/errors.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9a82bc0c71c177c25851caa715d5624090c5baf5f2ba78e8e4e29acb6c311885"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/help.py",
+      "name": "src/datasifter/datalens/help.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0ac0c9903479da588c78425006d90675f41a29a481955723c55b20dab4fd886e"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/intents.py",
+      "name": "src/datasifter/datalens/intents.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a324f23a8d8256a6a3de1653b8164db5aa6950dc6cc90e0c9c88325b150b3c78"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/models.py",
+      "name": "src/datasifter/datalens/models.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e4c6626f880ecfebe6b18027bd81fd5533a9b22b5861951f740a2acd8feef1ee"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/resolver.py",
+      "name": "src/datasifter/datalens/resolver.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f1ead54cae7a634fee0deeb84d18efb0efa65961a663177f43c4b630410808ae"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/schema.py",
+      "name": "src/datasifter/datalens/schema.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d24c8d89c85575d0e0f98ea31b795e1b7f333d925e19f9ec842b865f36d820b3"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/datalens/service.py",
+      "name": "src/datasifter/datalens/service.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9b127806e27af99cc78b6f7beab4b04c02d7323320804773fd68ee3ed999c845"
         }
       ],
       "properties": [
@@ -1344,7 +1675,24 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f17e9372ea02fa296dfdee698705f9f900b5422ec1e52cb4b73c64f0a0b1fe19"
+          "content": "b1a81af8d56211c2bc791048a7e8f58e10134ff534639bc5bc23bc2a5f274b4a"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/directory/ldif.py",
+      "name": "src/datasifter/directory/ldif.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "05b685f7ae7ee610349a0a784f98d96b0206f11b7d3c55494dc6cd21a605619f"
         }
       ],
       "properties": [
@@ -1361,7 +1709,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "965055539614d86cdddd69346c0b02b75553ce494f0b1cfdb3264730d358fcf3"
+          "content": "75d14247c1d133217b79837b447af17d2a5ff683c657f7e5f52f704a84d0e82f"
         }
       ],
       "properties": [
@@ -1378,7 +1726,24 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0ce50a3e5c4492f5a0dad5af4cf21c91945fa187ff1596a6866c489772c44231"
+          "content": "e10ef58520765cb8369438fe8fede357af4270ca1ef438373d2795eac0b2d334"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/remediation.py",
+      "name": "src/datasifter/remediation.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "812e03a185f3828d85f5e0faeb8a3626a65125f7d72a0c2c78a0d7ad60cebbdc"
         }
       ],
       "properties": [
@@ -1412,7 +1777,24 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "42a0cf07614f334b620bfebb7fabcb3df9802ea2fdd5f1e777617c0798a7555b"
+          "content": "eb36fac3afea3bd2af9cbe2de037f1c120877812eb040717af858c578fe3fcfd"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/session_commands.py",
+      "name": "src/datasifter/session_commands.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2bfb61cb4f0222248e7dbe107525b9650fdf25f954deba910cc25f3b20dab56d"
         }
       ],
       "properties": [
@@ -1441,12 +1823,12 @@
     },
     {
       "type": "file",
-      "bom-ref": "file:src/datasifter/ui/directory_lens.py",
-      "name": "src/datasifter/ui/directory_lens.py",
+      "bom-ref": "file:src/datasifter/ui/about_dialog.py",
+      "name": "src/datasifter/ui/about_dialog.py",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "6f298b0a5943b4f18996593184503fbb0cda5cafcd663a37c8823761cd409562"
+          "content": "50dcd47949dfb4227f4873ba9866f792d84673d22fd76e29eef57bfa094cf56b"
         }
       ],
       "properties": [
@@ -1458,12 +1840,29 @@
     },
     {
       "type": "file",
-      "bom-ref": "file:src/datasifter/ui/directory_lens_tab.py",
-      "name": "src/datasifter/ui/directory_lens_tab.py",
+      "bom-ref": "file:src/datasifter/ui/data_lens.py",
+      "name": "src/datasifter/ui/data_lens.py",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "15e4137ceafb7084af4f1add38fef108ec2a46b1513029c2824548210acf95df"
+          "content": "7839cb9f481bbb5e8d5e5e3d1b783077eb94b665ae3088d806b109ceb8accb81"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:src/datasifter/ui/data_lens_tab.py",
+      "name": "src/datasifter/ui/data_lens_tab.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "480d933acdfd618468ae0000b5a4027ba414a50ee60169ef03320e68c15413da"
         }
       ],
       "properties": [
@@ -1480,7 +1879,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "cd1ecdb51f4b85231f3a128641811af93acfab5882d5ffcb34795eada412c450"
+          "content": "16d945e942abdfe1f2de1fc47293ff6c28c8c061c1805f513780104da838b73f"
         }
       ],
       "properties": [
@@ -1514,7 +1913,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "bf5b7bdc98ad6a21852a9727c3a8c93c18bd0b40f61d8fe948c938bc1e0f84aa"
+          "content": "e9748ca929d5f77d02ead6e6d9022db7a4199e6482f4e538b5e0f59ab0ecd84b"
         }
       ],
       "properties": [
@@ -1538,6 +1937,40 @@
         {
           "name": "datasifter:category",
           "value": "source"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/conftest.py",
+      "name": "tests/conftest.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "980c2fdfa6374fca89048b46d1ba8a9d2fc425e218805675abc1cca85f95445a"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/datalens_support.py",
+      "name": "tests/datalens_support.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "92f2870b5392849841590946357f54e960c4eda5e62b43073bd7820f76814e48"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
         }
       ]
     },
@@ -1599,7 +2032,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "aa7616d917d3d0baa55c3e04d60c66a3743176b4bb617301b52d8e25ea42d3cd"
+          "content": "1e3c48b774094c2b843a868442474082cf4b7b5c9925005e4d7bcb9a3b5ac2a1"
         }
       ],
       "properties": [
@@ -1616,7 +2049,160 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7b4eb0b5fce6a6442686e366e7b5babc6cf70622f425d6697977c914f36f787b"
+          "content": "97dba8060bb3735773b34669f6aeb6ed5f9f1de621cbb698f1cbd3622fd29b25"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_data_lens.py",
+      "name": "tests/test_data_lens.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d01d922a2eb7bb83ad1c3843b6fef9618d754ead94680ad89c78dfe68021e2c5"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_datalens_adapters.py",
+      "name": "tests/test_datalens_adapters.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d4ac1ce84fa657c1492bca37a2f0a8f11a7bbcb31677dc5db12cc88c795134d9"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_datalens_help.py",
+      "name": "tests/test_datalens_help.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "075ac3f60ecedd6eb70c76288bce4fdc36de75bcbacc76885e8b0eb3bfa76032"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_datalens_intents.py",
+      "name": "tests/test_datalens_intents.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2ecea24aeab745c7d521fbf0059cb5e9c6d5a55482a1ff1d922cbb52c73188f6"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_datalens_models.py",
+      "name": "tests/test_datalens_models.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "01d861f8f7cd51210eaabdce7150518f3f3a446bbea1de6ffcd2d225e3b7ede7"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_datalens_resolver.py",
+      "name": "tests/test_datalens_resolver.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "573053ccb8dfa754a2dd2ee97836896ea54b3e96f33da7993f313085ad77812a"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_datalens_service.py",
+      "name": "tests/test_datalens_service.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "befa8ffc96edf3142f3cb42d4ac1ac910a8461cbc5f74f6b29cf8e8d56054350"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_delete_identifier.py",
+      "name": "tests/test_delete_identifier.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "74f5d58a043e5c1d77ef37933db0bb475e9f5d21b5302cdc49393334c347a999"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_delete_user.py",
+      "name": "tests/test_delete_user.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "95206ee20b0ccc2ce9639b15252d41f3df41dafc517e127a4273048ec2d3dbdb"
         }
       ],
       "properties": [
@@ -1633,24 +2219,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "6f689afd3c7cb32d38bc353c07de8b29ad96d910c2d5c8f32c6725327bad7c16"
-        }
-      ],
-      "properties": [
-        {
-          "name": "datasifter:category",
-          "value": "test"
-        }
-      ]
-    },
-    {
-      "type": "file",
-      "bom-ref": "file:tests/test_directory_lens.py",
-      "name": "tests/test_directory_lens.py",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "db186c0fa976aa7354b0608bc7db036d23d3caf534fc46dc59b3f07203138eb8"
+          "content": "a876759cc55e4b6b4ea8abbe2f384cb1dd2776b6cf78fbb29e964a580290784d"
         }
       ],
       "properties": [
@@ -1667,7 +2236,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a9fbc3226b79b1d1dcdd294e9a3536cbb783a3b347db50538029b091993b0437"
+          "content": "9093fd9a5b1a2cd0c7fac205434cfa14f0c7d8540c1dd8f199d48e33866440c3"
         }
       ],
       "properties": [
@@ -1684,7 +2253,58 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "cd2d8af8628185a90491b4de6f5fcae9ef3ece42b47d73f059708080291db48b"
+          "content": "4c613c5aa44b3054dfb719f1e5d1b734292f9cbb6429320bb6297f81844fd58a"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_ldif.py",
+      "name": "tests/test_ldif.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3bbc70daf89c60e3d31ce7d2f91505727e6ce50e9b66ef0a7531e1c3bd532c96"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_live_datalens.py",
+      "name": "tests/test_live_datalens.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ea84e540f6558ff30c7c75b24a942dee5acd2d12a83ade2a30ee3182dc6e4cc9"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_live_ldap.py",
+      "name": "tests/test_live_ldap.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "de2e39fa3e7fc2d6c92f2df350566f35ea475e287bb45647e815c0440bd7c4a1"
         }
       ],
       "properties": [
@@ -1701,7 +2321,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "782395a0159fd163252fc88eaa4cee4171b62b4adea353305679866fc4ace6c4"
+          "content": "df347cf380c98f1caf639e0d7d05d6fee3073276a49d54b4e108b947d02b3b7a"
         }
       ],
       "properties": [
@@ -1730,12 +2350,46 @@
     },
     {
       "type": "file",
+      "bom-ref": "file:tests/test_remediation.py",
+      "name": "tests/test_remediation.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "580561b5a776e1eb3d1346f9af11ccd622a6b8800a9736a1740763f2ecf318a1"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:tests/test_session_commands.py",
+      "name": "tests/test_session_commands.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "663f5dae172f71723f411677d9ce281027b5c2596674fb07ecc6b54811681215"
+        }
+      ],
+      "properties": [
+        {
+          "name": "datasifter:category",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "type": "file",
       "bom-ref": "file:tests/test_ui.py",
       "name": "tests/test_ui.py",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "24f736bbfcb86e71b0b1778af9941c493affe75fb499595551ac01b557788d09"
+          "content": "8809b3a243303ae3753ac5901fef1005f7a123afb696cbd95e8af30a679bb698"
         }
       ],
       "properties": [
@@ -1769,7 +2423,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0817924a783e6cc9bbd82f828e6fadde7d774a5662aedc1bebe00924600172e7"
+          "content": "d34b12f5b840241b98d102a172427579d4a2267ae89c7a63ec37215b3cb4e1dd"
         }
       ],
       "properties": [
@@ -1786,7 +2440,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4836158418d115cae83a5f96221359c85279c5fbb2207d3038dc15edcf818aaa"
+          "content": "4f88ed05c8086df22c45f0713dca07424ca2cee6d584d61719228ebff20d211e"
         }
       ],
       "properties": [
@@ -2075,7 +2729,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a117b9488bd6111a7f77677830f3af5f6312a1f39d39927abe824375a4dd92fa"
+          "content": "e3abc5573ea5b843fb0c135cd00509ccf5b80f03b8a12b68c9ee1dfd8464bbbb"
         }
       ],
       "properties": [
@@ -2092,7 +2746,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "6313c373d4330e4acfa8e1e06f63bcd7ed34f94807ebeb856e6ca3b6f27d6f85"
+          "content": "6266642828320f2d9d29f9e607323bf53f8b69d5d59cb4e01e3a8a07a3eb813c"
         }
       ],
       "properties": [
@@ -2109,7 +2763,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c2fe516dd487b6030e60511f0d81f95183d32c5fc5fe98d8ea144c34781fc003"
+          "content": "78265f8adf9e1514d8abdaeee25a91428051c25df5930e1300568cf658ebd5e3"
         }
       ],
       "properties": [
@@ -2126,24 +2780,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c99233e0c5a92f4bddf4fa8ffbdd9d75265b69c2096591b2016fa0ee4268c06a"
-        }
-      ],
-      "properties": [
-        {
-          "name": "datasifter:category",
-          "value": "packaged-native"
-        }
-      ]
-    },
-    {
-      "type": "file",
-      "bom-ref": "file:dist/DataSifter 2.0/_internal/api-ms-win-core-fibers-l1-1-0.dll",
-      "name": "dist/DataSifter 2.0/_internal/api-ms-win-core-fibers-l1-1-0.dll",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "36ffe216b07d3ad4d00a1e84f5fe640789a7e600b082c4f43e78be54c5f20505"
+          "content": "05a60a7d2bf7a2dba1d47f71735918ca13510959cf7339965c94083bb06aa490"
         }
       ],
       "properties": [
@@ -2160,7 +2797,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "5b7bc067babca352cdb283373770fe7da085226d6f024dee17664226b21f2962"
+          "content": "8943d3489417ed3aa7380c787c7d3278574de0a65940bb4e6a696f899abf612a"
         }
       ],
       "properties": [
@@ -2177,7 +2814,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f113a7b359889f87158e27a882930d73cc3a9df7f73216274e7fe64075ba4a14"
+          "content": "857a9259ca82d06e50d5c34974912af8450e7dd04968c091c721301e5e118f77"
         }
       ],
       "properties": [
@@ -2194,7 +2831,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7dba105af76154d437fd0c1f942fccc86e481e1d2e9a3f7ea767eb7b0122eafa"
+          "content": "8d15c0d990bf6695aa0d4069aaa97116e5a30ba141567f6340de82014b6968bc"
         }
       ],
       "properties": [
@@ -2211,7 +2848,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "53a4ddc354cc6b264a722833f402301009fd4a9091afe1babdd7144adc66f3e7"
+          "content": "109c0e7853ad59a51e126dbd63c62a8afd94acc0084bdaf8a0bf0bea2e53582e"
         }
       ],
       "properties": [
@@ -2228,7 +2865,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c605856f77e404b15940cc17ef09eff274939db1bb97d4b22278b1cf75c41096"
+          "content": "9e28d6bb6f9aa311ac17df663d453de435ab70ffcdf6d86791975bce27ba4190"
         }
       ],
       "properties": [
@@ -2245,7 +2882,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f5e2ee1b6b2abd9695ccc72a493432bceef2806bfb6ac97e3eb333b99b7a2ffb"
+          "content": "37f759c01649e4cb9f3dc93c498a41c130747e52c4d203dc4a89408e70d7159d"
         }
       ],
       "properties": [
@@ -2262,7 +2899,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "daf7d8310ed34a97ca36561833c4668e101200f95d42d2452b85527c5cea101b"
+          "content": "25db9a5ab516d776a39154db8ca1ec1459809f7e595b8af1c39134dc25d342b6"
         }
       ],
       "properties": [
@@ -2279,7 +2916,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c4e59f279fa6a0782212a878ea3eaf071050b821c6bb8e196c20d06ba0b32309"
+          "content": "1c200be45b4b241fd3b97911c286911787264fe63be33daa7a002d19d089788f"
         }
       ],
       "properties": [
@@ -2296,7 +2933,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f6e56efddb200ab4d44318c3fd8801a3b82e37eb815f26df4b991ac85b9f7d31"
+          "content": "15cbe13c1328b6351881615cfbf6ff4bfc842743bec407890141a22eddb9c667"
         }
       ],
       "properties": [
@@ -2313,7 +2950,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9ae18f8d83027c6bc35da51d9278f862148fec5b003f49fc73c31b4420a016b2"
+          "content": "757ded78500d71305e2be3df2f48bc5002779af6c535529bac69f174f9fe1e93"
         }
       ],
       "properties": [
@@ -2330,7 +2967,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "84ddf1c1db481339987cf099078ec4494c3c377c0299a46ae87c0ac2bbab04bc"
+          "content": "cb2c570fc013a8ad37602c46a218e68595599b8c147a8a3a02bb878dd84f5a17"
         }
       ],
       "properties": [
@@ -2347,7 +2984,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c6110674f118b5eeeff5babb7d584b63f3d4c762cf7734969bc6aaaeccc0b408"
+          "content": "8696856e0ab4170c02ae4487b4e50671e070fe18a64063243550d3b952778cb4"
         }
       ],
       "properties": [
@@ -2364,7 +3001,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e220b4af54606ae96e808f562c43b1fe767496b05a3cb084a9315033378fee68"
+          "content": "1778b2c4b0e80b34bf69fbffc85c2c5ca99407ae47fc499274c633817607352f"
         }
       ],
       "properties": [
@@ -2381,7 +3018,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d5b8c1b9251059fd8cdccd57b564aa406f216f297c01c6e3fbb1cf71b1e3f32f"
+          "content": "2ac40c7f94b88ce81be001e0c5c615dea585ba87811a75cc9d299cfa4ee67b69"
         }
       ],
       "properties": [
@@ -2398,7 +3035,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "627cb3973cc66612a69f8a64e6caca8944b0a93e337487d2bd97eab50242d699"
+          "content": "e76b5ec82f9230f4016bf2f4deed40af24a9953e8d35fa035aceb7a56c10396e"
         }
       ],
       "properties": [
@@ -2415,7 +3052,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0f1b5ea355da93cbe7cb75380c9062f8937d94d5c486ef33dfdd6b4bdde04e6d"
+          "content": "53f459f81513fe69c0db6fe506589410acb7e886571217e0df11c62826e3fd1c"
         }
       ],
       "properties": [
@@ -2432,7 +3069,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "611d898dcb1f710e2b1769db1729bbdd95602c9b8650f6bf2f572fcfebf96d19"
+          "content": "f7eb1eeaf50c6c33a39d194fbc34177f8eebd38582867b29835180da44f07dff"
         }
       ],
       "properties": [
@@ -2449,7 +3086,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0c47108194cea7d549af81f226b6cc49d242daf2d9bdffb3faebdf9fe67bb148"
+          "content": "c71d781b40613cebcd8a7cdd643eb4cf87de1e8c1438c1c3908f6447d399471f"
         }
       ],
       "properties": [
@@ -2466,7 +3103,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "8482e96387aa67faaf5008094293743a374212b8067561d5813976b00013ef72"
+          "content": "88a1194b38f00a9e0fb3297c30b9597c3422a61ebb5e648cfd4611e3546db709"
         }
       ],
       "properties": [
@@ -2483,7 +3120,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "97187cf4c59f08b0d5e731d08aba14b4e0e3056d804143919fad8b3549e979f0"
+          "content": "db2326442cf965d4727fc994f858a2e589479b87e0d56ef92ad995d97b16e6be"
         }
       ],
       "properties": [
@@ -2500,7 +3137,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "db8ae9a98e8d414991a4831e2ea47e9530b854ea423806caa2ec9054e839da08"
+          "content": "c950da939965550dfc51af803fb17ecb927d47ac4ea1772456c52c017154f228"
         }
       ],
       "properties": [
@@ -2517,7 +3154,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f34f0b3b865e1905e03df37b55537a04a3dd64d7efe8e02dacc5cdd31c7f559f"
+          "content": "2858c3beb2462034e933b07928afc2e1e22c0f413518ff56740c5dcbaa8f0def"
         }
       ],
       "properties": [
@@ -2534,7 +3171,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a23f79dea170f13580f1f6fa79e287289f61d9b767a06c2f759428150c1d0e2d"
+          "content": "3a1bbb529114cfd1d627e5572115c78f11b7a3357cb170aff2d33a165b30d62d"
         }
       ],
       "properties": [
@@ -2551,7 +3188,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b73d0cb7f26c5975ff749f93b20d49032d8c31a6aba5093bad16519251b481bd"
+          "content": "3c6578465af434d2df087908728a478b012c74981ddf1f0212fca99629a6f139"
         }
       ],
       "properties": [
@@ -2568,7 +3205,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "2ef6bf444bc61eeceb1207d1dad79be5e4eb28984a80c49bdbb2ad65c2cea875"
+          "content": "7a2f4c1bbd163afb03396cfdbc85e6a656ab7a4372f772c3427fe19557657e7b"
         }
       ],
       "properties": [
@@ -2585,7 +3222,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "1e913633caf31bc18faaea205569694b358c72c17dc93735c492ee40f7dc7e84"
+          "content": "5d5370e8d958392ad027437826c222f52beab5beb1385d767e288bcd484eb163"
         }
       ],
       "properties": [
@@ -2602,7 +3239,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7b66fa037fd3f71371b3ad9967f2cb3bf112c8663b90c0e76ceec8bd6d594a15"
+          "content": "4c6edace5e1f856480f7423326cd2e4a34bf09fbb2cffb4e335e880409d4cf7c"
         }
       ],
       "properties": [
@@ -2619,7 +3256,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "cb6629ffac613c87224ac7f0135f144e8daf9b03886019cf112c018de3c24be8"
+          "content": "c0e38a848661e6a222da08eb29d92d7606056c816253caed51a619190b7706b5"
         }
       ],
       "properties": [
@@ -2636,7 +3273,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ca27302931e60202caee6f54fb07d8796a748f58629d83f6272636a7e02da34b"
+          "content": "0fd0138f65cd9e31e44fb5768217f5b31b374e31db53427c6b39adcbb8b4e5c2"
         }
       ],
       "properties": [
@@ -2653,7 +3290,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c570c8156d0dbb5a564c2e67e11466e5a2d154baaaf3e0128370cc45edc2cd43"
+          "content": "6c3a236a8e74e7d57896a749a6766db82ff3371005005ed700b90c7975e4f45f"
         }
       ],
       "properties": [
@@ -2670,7 +3307,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b0981bf692102f9e35fcb1b6c5794bb428da1bbf91d6b611514b0c6fb3d2d401"
+          "content": "cfca3fcf7f09d1a5966028a1c0347223612496ccb0280978589c269c4867642d"
         }
       ],
       "properties": [
@@ -2687,7 +3324,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3d3e2ac61d553a87e8756b595f0accbcce0d9cbbee988bf5bb054ddc7b0abb70"
+          "content": "928a86deccfb4fab9e869244421c63996ee1d8ef9685009ce41814661e7118be"
         }
       ],
       "properties": [
@@ -2704,7 +3341,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "53e0c388e407fde47b29189e2fefef7781c38d33748acff7892d078735c64a45"
+          "content": "76c31b7769f645146379a8dfdd334c2e4b0041a090dae84373570d4c4788e4ff"
         }
       ],
       "properties": [
@@ -2721,7 +3358,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d45cbd09183298eae8a83deda10ef3f33950c55f98d8c23f57080db63dbdf7dd"
+          "content": "953d572c4918b2bc1486501a73e62509b5b61f2eb6f781c066b3eb72c14fee35"
         }
       ],
       "properties": [
@@ -2738,7 +3375,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d33eff37f70c7a4b8a69b744087c5be130171eb886ebb31f6757dde1add0b58f"
+          "content": "6b9c38e18a2f8888a07ae3006133f102fb9dc391d5f1c7496a402eee4181858c"
         }
       ],
       "properties": [
@@ -3707,7 +4344,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "45972b6f719d3bb20b667f184a3bb3cf5540e42c081e1392ac501fb4046e61a0"
+          "content": "bfed22e75c591a195be93ce2345ccaca4c6647e76e45df1f58d3439e00611f9c"
         }
       ],
       "properties": [
@@ -3775,7 +4412,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a3cc29ada69ddee7fce6355963faed78c781ab92395df7b772f7463a48e0eccb"
+          "content": "915c40f58a1ccffeecfe3c12d164e0dc093c5f544dbeee72fb45201aa3eda9ae"
         }
       ],
       "properties": [
@@ -3789,6 +4426,10 @@
   "dependencies": [
     {
       "ref": "pkg:pypi/altgraph@0.17.5",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/annotated-types@0.8.0",
       "dependsOn": []
     },
     {
@@ -3986,6 +4627,21 @@
       "dependsOn": []
     },
     {
+      "ref": "pkg:pypi/pydantic-core@2.50.5",
+      "dependsOn": [
+        "pkg:pypi/typing-extensions@4.16.0"
+      ]
+    },
+    {
+      "ref": "pkg:pypi/pydantic@2.14.4",
+      "dependsOn": [
+        "pkg:pypi/annotated-types@0.8.0",
+        "pkg:pypi/pydantic-core@2.50.5",
+        "pkg:pypi/typing-extensions@4.16.0",
+        "pkg:pypi/typing-inspection@0.4.5"
+      ]
+    },
+    {
       "ref": "pkg:pypi/pygments@2.21.0",
       "dependsOn": []
     },
@@ -4097,6 +4753,12 @@
       "dependsOn": []
     },
     {
+      "ref": "pkg:pypi/typing-inspection@0.4.5",
+      "dependsOn": [
+        "pkg:pypi/typing-extensions@4.16.0"
+      ]
+    },
+    {
       "ref": "pkg:pypi/tzdata@2026.6",
       "dependsOn": []
     },
@@ -4115,7 +4777,7 @@
       ]
     },
     {
-      "ref": "datasifter:0.006",
+      "ref": "datasifter:0.010",
       "dependsOn": [
         "cpython:3.15.2",
         "file:datasifter.spec",
@@ -4172,7 +4834,6 @@
         "file:dist/DataSifter 2.0/_internal/api-ms-win-core-datetime-l1-1-0.dll",
         "file:dist/DataSifter 2.0/_internal/api-ms-win-core-debug-l1-1-0.dll",
         "file:dist/DataSifter 2.0/_internal/api-ms-win-core-errorhandling-l1-1-0.dll",
-        "file:dist/DataSifter 2.0/_internal/api-ms-win-core-fibers-l1-1-0.dll",
         "file:dist/DataSifter 2.0/_internal/api-ms-win-core-file-l1-1-0.dll",
         "file:dist/DataSifter 2.0/_internal/api-ms-win-core-file-l1-2-0.dll",
         "file:dist/DataSifter 2.0/_internal/api-ms-win-core-file-l2-1-0.dll",
@@ -4239,36 +4900,70 @@
         "file:pyproject.toml",
         "file:src/datasifter/__init__.py",
         "file:src/datasifter/__main__.py",
+        "file:src/datasifter/_build_stamp.py",
         "file:src/datasifter/ai/__init__.py",
         "file:src/datasifter/ai/local_model.py",
         "file:src/datasifter/ai/model_catalog.py",
         "file:src/datasifter/build_info.py",
         "file:src/datasifter/build_version.py",
         "file:src/datasifter/config.py",
+        "file:src/datasifter/datalens/__init__.py",
+        "file:src/datasifter/datalens/adapters/__init__.py",
+        "file:src/datasifter/datalens/adapters/active_directory.py",
+        "file:src/datasifter/datalens/adapters/base.py",
+        "file:src/datasifter/datalens/adapters/standard.py",
+        "file:src/datasifter/datalens/aliases.py",
+        "file:src/datasifter/datalens/dn.py",
+        "file:src/datasifter/datalens/errors.py",
+        "file:src/datasifter/datalens/help.py",
+        "file:src/datasifter/datalens/intents.py",
+        "file:src/datasifter/datalens/models.py",
+        "file:src/datasifter/datalens/resolver.py",
+        "file:src/datasifter/datalens/schema.py",
+        "file:src/datasifter/datalens/service.py",
         "file:src/datasifter/diagnostics.py",
         "file:src/datasifter/directory/__init__.py",
         "file:src/datasifter/directory/filters.py",
+        "file:src/datasifter/directory/ldif.py",
         "file:src/datasifter/directory/service.py",
         "file:src/datasifter/directory/worker.py",
+        "file:src/datasifter/remediation.py",
         "file:src/datasifter/security/__init__.py",
         "file:src/datasifter/security/certificates.py",
+        "file:src/datasifter/session_commands.py",
         "file:src/datasifter/ui/__init__.py",
-        "file:src/datasifter/ui/directory_lens.py",
-        "file:src/datasifter/ui/directory_lens_tab.py",
+        "file:src/datasifter/ui/about_dialog.py",
+        "file:src/datasifter/ui/data_lens.py",
+        "file:src/datasifter/ui/data_lens_tab.py",
         "file:src/datasifter/ui/main_window.py",
         "file:src/datasifter/ui/model_dialog.py",
         "file:src/datasifter/ui/settings_dialog.py",
+        "file:tests/conftest.py",
+        "file:tests/datalens_support.py",
         "file:tests/test_bom.py",
         "file:tests/test_build_info.py",
         "file:tests/test_build_version.py",
         "file:tests/test_certificates.py",
         "file:tests/test_config.py",
+        "file:tests/test_data_lens.py",
+        "file:tests/test_datalens_adapters.py",
+        "file:tests/test_datalens_help.py",
+        "file:tests/test_datalens_intents.py",
+        "file:tests/test_datalens_models.py",
+        "file:tests/test_datalens_resolver.py",
+        "file:tests/test_datalens_service.py",
+        "file:tests/test_delete_identifier.py",
+        "file:tests/test_delete_user.py",
         "file:tests/test_diagnostics.py",
-        "file:tests/test_directory_lens.py",
         "file:tests/test_directory_service.py",
         "file:tests/test_filters.py",
+        "file:tests/test_ldif.py",
+        "file:tests/test_live_datalens.py",
+        "file:tests/test_live_ldap.py",
         "file:tests/test_local_ai.py",
         "file:tests/test_model_catalog.py",
+        "file:tests/test_remediation.py",
+        "file:tests/test_session_commands.py",
         "file:tests/test_ui.py",
         "file:tests/test_worker.py",
         "file:tools/generate_bom.py",
@@ -4278,6 +4973,7 @@
         "pkg:pypi/ldap3@2.9.1",
         "pkg:pypi/llama-cpp-python@0.3.36",
         "pkg:pypi/packaging@26.3",
+        "pkg:pypi/pydantic@2.14.4",
         "pkg:pypi/pyinstaller@6.22.3",
         "pkg:pypi/pyqt6@6.12.0",
         "pkg:pypi/pytest-qt@4.5.0",

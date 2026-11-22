@@ -9,6 +9,7 @@ from datasifter.config import DirectoryProfile
 from datasifter.directory.service import (
     MODIFY_REPLACE,
     LDAPOperationError,
+    LDAPResultError,
     LDAPService,
     _dn_depth,
     _log_protocol_request,
@@ -105,6 +106,30 @@ def test_modify_protocol_log_redacts_attribute_values(monkeypatch, caplog):
     assert "<redacted>" in caplog.text
     assert "'type': 'modifyRequest'" in caplog.text
     assert "sensitive-value" not in caplog.text
+
+
+def test_protocol_log_survives_ldap3_rendering_of_extensible_matches(caplog):
+    # ldap3 records an extensible-match assertion in this multi-line form, which is
+    # not RFC 4515 text. Logging it must neither fail the search nor leak values.
+    connection = SimpleNamespace(
+        request={
+            "type": "searchRequest",
+            "base": "dc=test",
+            "filter": (
+                "(&(cn=private-name)(ExtensibleMatch:\n matchingRule=1.2.840.113556.1.4.803"
+                "\n type=userAccountControl\n matchValue=2\n dnAttributes=False\n))"
+            ),
+        }
+    )
+
+    as_written = "(&(cn=private-name)(userAccountControl:1.2.840.113556.1.4.803:=2))"
+    with caplog.at_level("INFO", logger="datasifter.protocol"):
+        _log_protocol_request(
+            "searchRequest", connection, filter=_redact_filter_values(as_written)
+        )
+
+    assert "private-name" not in caplog.text and "matchValue" not in caplog.text
+    assert "(userAccountControl:1.2.840.113556.1.4.803:=<redacted>)" in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -593,3 +618,42 @@ def test_base_dn_discovery_reports_access_failure(monkeypatch):
     monkeypatch.setattr(service, "_connection", bound)
     with pytest.raises(LDAPOperationError, match="Base DN discovery failed"):
         service.discover_base_dns()
+
+
+def test_false_ldap_result_preserves_protocol_code(monkeypatch):
+    service = LDAPService(DirectoryProfile(name="test", host="ldap.test"), None)
+    connection = SimpleNamespace(
+        result={"result": 50, "description": "insufficientAccessRights"},
+        search=lambda **kwargs: False,
+    )
+
+    @contextmanager
+    def bound(*_args, **_kwargs):
+        yield connection
+
+    monkeypatch.setattr(service, "_connection", bound)
+    with pytest.raises(LDAPResultError) as failure:
+        service.discover_base_dns()
+    assert failure.value.result_code == 50
+
+
+def test_ldap3_exception_preserves_protocol_code(monkeypatch):
+    from ldap3.core.exceptions import LDAPInvalidCredentialsResult
+
+    class FailedBind:
+        closed = True
+
+        def __init__(self, _server, **_options):
+            pass
+
+        def open(self):
+            pass
+
+        def bind(self):
+            raise LDAPInvalidCredentialsResult(result=49, description="invalidCredentials")
+
+    monkeypatch.setattr("datasifter.directory.service.Connection", FailedBind)
+    service = LDAPService(DirectoryProfile(name="test", host="ldap.test"), None)
+    with pytest.raises(LDAPResultError) as failure:
+        service.test_authentication()
+    assert failure.value.result_code == 49

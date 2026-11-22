@@ -1,4 +1,4 @@
-"""DirectoryLens – a simple UI component for browsing and editing LDAP entries.
+"""DataLens – a simple UI component for browsing and editing LDAP entries.
 
 The component is intentionally lightweight; it is designed to be dropped into the
 existing application without affecting the current test suite.  The class
@@ -17,18 +17,19 @@ attribute editing or filtering.
 from __future__ import annotations
 
 import os
-from typing import Any, Callable, Dict, List
+from collections.abc import Callable
+from typing import Any
 
-from PyQt6.QtCore import QThreadPool, QTimer, pyqtSignal, Qt
+from PyQt6.QtCore import Qt, QThreadPool, pyqtSignal
 from PyQt6.QtGui import QGuiApplication, QStandardItem, QStandardItemModel
-from PyQt6.QtWidgets import QTreeView, QWidget, QVBoxLayout
+from PyQt6.QtWidgets import QTreeView, QVBoxLayout, QWidget
 
-from datasifter.directory.filters import USER_ID_ATTRIBUTES, escape_filter_value
+from datasifter.directory.filters import escape_filter_value
 from datasifter.directory.service import LDAPService
 from datasifter.directory.worker import DirectoryWorker
 
 
-class DirectoryLens(QWidget):
+class DataLens(QWidget):
     """A widget that displays LDAP entries and exposes CRUD operations.
 
     Parameters
@@ -68,7 +69,7 @@ class DirectoryLens(QWidget):
 
     def _populate(self, preserve_dn: str | None = None) -> None:
         """Populate the tree from the LDAP directory."""
-        def worker(cancelled: Any, progress: Callable[[int, str], None]) -> List[Dict[str, Any]]:
+        def worker(cancelled: Any, progress: Callable[[int, str], None]) -> list[dict[str, Any]]:
             if cancelled is None:
                 return self.service.search(self.root_dn, "(objectClass=*)", scope="subtree")
             return self.service.search(
@@ -79,7 +80,7 @@ class DirectoryLens(QWidget):
                 progress=progress,
             )
 
-        def on_success(result: List[Dict[str, Any]]) -> None:
+        def on_success(result: list[dict[str, Any]]) -> None:
             self.model.removeRows(0, self.model.rowCount())
             for entry in result:
                 dn = entry.get("dn", "")
@@ -123,7 +124,7 @@ class DirectoryLens(QWidget):
     # ---------------------------------------------------------------------
     # CRUD operations
     # ---------------------------------------------------------------------
-    def create_entry(self, dn: str, attributes: Dict[str, List[Any]]) -> None:
+    def create_entry(self, dn: str, attributes: dict[str, list[Any]]) -> None:
         """Create a new LDAP entry."""
         def worker(cancelled: Any, progress: Callable[[int, str], None]) -> None:
             if cancelled is None:
@@ -215,7 +216,7 @@ class DirectoryLens(QWidget):
 
         self._run_operation(worker, on_success)
 
-    def update_entry(self, dn: str, changes: Dict[str, List[tuple[str, Any]]]) -> None:
+    def update_entry(self, dn: str, changes: dict[str, list[tuple[str, Any]]]) -> None:
         """Update an existing LDAP entry.
 
         Parameters

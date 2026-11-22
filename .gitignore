@@ -19,3 +19,4 @@ htmlcov/
 *.p12
 *.pfx
 profiles.json
+*.local.json

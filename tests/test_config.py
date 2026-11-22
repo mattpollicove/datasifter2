@@ -19,7 +19,10 @@ def test_configuration_round_trips_without_passwords(tmp_path):
         transport="ldaps",
         bind_dn="cn=reader,dc=example,dc=test",
     )
-    configuration = LocalConfiguration(profiles=[profile])
+    configuration = LocalConfiguration(
+        profiles=[profile],
+        last_connected_profile_id=profile.profile_id,
+    )
     store = ConfigurationStore(tmp_path / "profiles.json")
 
     store.save(configuration)
@@ -27,6 +30,7 @@ def test_configuration_round_trips_without_passwords(tmp_path):
 
     assert loaded.profiles == [profile]
     assert loaded.preferences.require_ai_confirmation is True
+    assert loaded.last_connected_profile_id == profile.profile_id
     persisted = json.loads(store.path.read_text(encoding="utf-8"))
     assert "password" not in json.dumps(persisted).casefold()
 
@@ -51,6 +55,7 @@ def test_ai_enabled_defaults_for_old_configuration_and_round_trips(tmp_path):
     store.path.write_text('{"preferences": {"require_ai_confirmation": true}}', encoding="utf-8")
     configuration = store.load()
     assert configuration.preferences.ai_enabled is True
+    assert configuration.last_connected_profile_id is None
     configuration.preferences.ai_enabled = False
     store.save(configuration)
     assert store.load().preferences.ai_enabled is False

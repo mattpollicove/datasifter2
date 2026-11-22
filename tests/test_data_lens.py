@@ -1,4 +1,4 @@
-"""Unit tests for :class:`datasifter.ui.directory_lens.DirectoryLens`.
+"""Unit tests for :class:`datasifter.ui.data_lens.DataLens`.
 
 The tests use a lightweight mock of :class:`datasifter.directory.service.LDAPService`
 to verify that CRUD operations correctly start a :class:`DirectoryWorker` and
@@ -10,7 +10,7 @@ from PyQt6.QtTest import QSignalSpy
 
 from datasifter.config import DirectoryProfile
 from datasifter.directory.service import LDAPService
-from datasifter.ui.directory_lens import DirectoryLens
+from datasifter.ui.data_lens import DataLens
 
 
 class MockLDAPService(LDAPService):
@@ -48,14 +48,14 @@ class MockLDAPService(LDAPService):
 def test_nlp_create_command(lens, qtbot, monkeypatch):
     from PyQt6.QtWidgets import QMessageBox
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     monkeypatch.setattr(
         QMessageBox,
         "question",
         lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
     )
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     tab.cmd_input.setText('create entry cn=Test,dc=example,dc=com with attributes {"objectClass":["inetOrgPerson"],"cn":["Test"]}')
     tab._execute_command()
     qtbot.waitUntil(lambda: bool(lens.service.calls), timeout=1000)
@@ -72,7 +72,7 @@ def test_nlp_create_user_builds_entry_without_logging_password(lens, qtbot, monk
 
     from PyQt6.QtWidgets import QMessageBox
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     monkeypatch.setattr(
         QMessageBox,
@@ -80,7 +80,7 @@ def test_nlp_create_user_builds_entry_without_logging_password(lens, qtbot, monk
         lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
     )
     caplog.set_level(logging.DEBUG, logger="datasifter")
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     tab.submit_command(
         "create user Matt Pollicove in the people OU, cn is mattp, password is test-secret"
     )
@@ -104,14 +104,14 @@ def test_nlp_create_user_builds_entry_without_logging_password(lens, qtbot, monk
 def test_nlp_update_command(lens, qtbot, monkeypatch):
     from PyQt6.QtWidgets import QMessageBox
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     monkeypatch.setattr(
         QMessageBox,
         "question",
         lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
     )
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     tab.cmd_input.setText(
         'update entry cn=alexsmith,ou=people,dc=example,dc=com '
         'changes={"sn":[["replace",["Smith"]]]}'
@@ -124,6 +124,69 @@ def test_nlp_update_command(lens, qtbot, monkeypatch):
         {"sn": [["replace", ["Smith"]]]},
     )
     tab.close()
+
+
+@pytest.mark.parametrize(
+    ("method", "message"),
+    [
+        ("_create_entry", "Invalid attributes JSON:"),
+        ("_update_entry", "Invalid changes JSON:"),
+    ],
+)
+def test_crud_dialog_reports_invalid_json(lens, qtbot, monkeypatch, method, message):
+    from PyQt6.QtWidgets import QInputDialog
+
+    from datasifter.ui import data_lens_tab
+
+    tab = data_lens_tab.DataLensTab(lens.service)
+    qtbot.addWidget(tab)
+    monkeypatch.setattr(QInputDialog, "getText", lambda *_args: ("cn=test", True))
+    monkeypatch.setattr(QInputDialog, "getMultiLineText", lambda *_args: ("{bad}", True))
+    monkeypatch.setattr(tab, "_selected_entry_dn", lambda: "cn=test")
+    logged = []
+    monkeypatch.setattr(data_lens_tab, "log_exception", logged.append)
+
+    getattr(tab, method)()
+
+    assert message in tab.log.toPlainText()
+    assert len(logged) == 1 and isinstance(logged[0], ValueError)
+    assert not lens.service.calls
+
+
+def test_command_reports_failed_ldap_lookup(lens, qtbot, monkeypatch):
+    from datasifter.directory.service import LDAPOperationError
+    from datasifter.ui import data_lens_tab
+
+    tab = data_lens_tab.DataLensTab(lens.service)
+    qtbot.addWidget(tab)
+    error = LDAPOperationError("directory unavailable")
+
+    def fail_search(*_args, **_kwargs):
+        raise error
+
+    logged = []
+    monkeypatch.setattr(lens.service, "search", fail_search)
+    monkeypatch.setattr(data_lens_tab, "log_exception", logged.append)
+    tab.submit_command("delete entry alexsmith")
+
+    assert "Command error: directory unavailable" in tab.log.toPlainText()
+    assert logged == [error]
+    assert not lens.service.calls
+
+
+def test_command_reports_unrecognized_input(lens, qtbot, monkeypatch):
+    from datasifter.ui import data_lens_tab
+
+    tab = data_lens_tab.DataLensTab(lens.service)
+    qtbot.addWidget(tab)
+    logged = []
+    monkeypatch.setattr(data_lens_tab, "log_exception", logged.append)
+
+    tab.submit_command("unrecognized command")
+
+    assert "Command error: Unrecognized command" in tab.log.toPlainText()
+    assert len(logged) == 1 and isinstance(logged[0], ValueError)
+    assert not lens.service.calls
 
 
 @pytest.mark.parametrize(
@@ -146,7 +209,7 @@ def test_add_attribute_to_user_maps_phone_aliases(
 ):
     from PyQt6.QtWidgets import QMessageBox
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     monkeypatch.setattr(
         QMessageBox,
@@ -154,7 +217,7 @@ def test_add_attribute_to_user_maps_phone_aliases(
         lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
     )
     lens.service.search_results = [{"dn": "uid=mattp,ou=people,dc=example,dc=com"}]
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     tab.submit_command(f"add {attribute_name} to mattp 732 555 1212")
     qtbot.waitUntil(
         lambda: any(call[0] == "modify_entry" for call in lens.service.calls),
@@ -172,7 +235,7 @@ def test_add_attribute_to_user_maps_phone_aliases(
 def test_add_attribute_to_user_rejects_ambiguous_identifier(lens, qtbot, monkeypatch):
     from PyQt6.QtWidgets import QMessageBox
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     monkeypatch.setattr(
         QMessageBox,
@@ -183,7 +246,7 @@ def test_add_attribute_to_user_rejects_ambiguous_identifier(lens, qtbot, monkeyp
         {"dn": "uid=mattp,ou=people,dc=example,dc=com"},
         {"dn": "cn=mattp,ou=contractors,dc=example,dc=com"},
     ]
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     tab.submit_command("add phone to mattp 7325551212")
     qtbot.waitUntil(lambda: "Multiple users matched" in tab.log.toPlainText(), timeout=1000)
 
@@ -194,14 +257,14 @@ def test_add_attribute_to_user_rejects_ambiguous_identifier(lens, qtbot, monkeyp
 def test_nlp_delete_command(lens, qtbot, monkeypatch):
     from PyQt6.QtWidgets import QMessageBox
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     monkeypatch.setattr(
         QMessageBox,
         "question",
         lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
     )
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     tab.cmd_input.setText("delete entry dn=cn=alexsmith,ou=people,dc=example,dc=com")
     tab._execute_command()
     qtbot.waitUntil(lambda: bool(lens.service.calls), timeout=1000)
@@ -212,11 +275,11 @@ def test_nlp_update_user_command(lens, qtbot, monkeypatch):
     """Verify that the new ``update user`` natural‑language syntax works.
 
     The command should resolve the identifier to a DN, construct a replace
-    change for the attribute, and invoke :meth:`DirectoryLens.modify_entry`.
+    change for the attribute, and invoke :meth:`DataLens.modify_entry`.
     """
     from PyQt6.QtWidgets import QMessageBox
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     monkeypatch.setattr(
         QMessageBox,
@@ -225,7 +288,7 @@ def test_nlp_update_user_command(lens, qtbot, monkeypatch):
     )
     # Provide a deterministic search result for the identifier ``mattp``.
     lens.service.search_results = [{"dn": "uid=mattp,ou=people,dc=example,dc=com"}]
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     tab.submit_command("update user mattp password to @newpass")
     qtbot.waitUntil(lambda: bool(lens.service.calls), timeout=1000)
     # The last call should be a modify_entry with a replace change.
@@ -240,7 +303,7 @@ def test_attribute_first_update_command_uses_prompt_data_without_followups(
 ):
     from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     monkeypatch.setattr(
         QMessageBox,
@@ -258,7 +321,7 @@ def test_attribute_first_update_command_uses_prompt_data_without_followups(
         lambda *_args, **_kwargs: pytest.fail("The command should not request changes JSON"),
     )
     lens.service.search_results = [{"dn": "uid=mattp,ou=people,dc=example,dc=com"}]
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
 
     tab.submit_command("update phone number to mattp 732 555 1414")
     qtbot.waitUntil(lambda: any(call[0] == "modify_entry" for call in lens.service.calls), timeout=1000)
@@ -276,7 +339,7 @@ def test_update_attribute_for_user_confirms_prompt_fields_and_replaces_value(
 ):
     from PyQt6.QtWidgets import QInputDialog
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     monkeypatch.setattr(
         QInputDialog,
@@ -289,7 +352,7 @@ def test_update_attribute_for_user_confirms_prompt_fields_and_replaces_value(
         lambda *_args, **_kwargs: pytest.fail("The command should not request changes JSON"),
     )
     lens.service.search_results = [{"dn": "uid=mattp,ou=people,dc=example,dc=com"}]
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     confirmations = []
 
     def confirm(action, operation, confirmation_message=None):
@@ -313,9 +376,9 @@ def test_update_attribute_for_user_confirms_prompt_fields_and_replaces_value(
 
 
 def test_unrecognized_commands_show_crud_examples_and_search_guidance(lens):
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     tab.submit_command("show user mattp")
     message = tab.log.toPlainText()
 
@@ -334,7 +397,7 @@ def test_unrecognized_commands_show_crud_examples_and_search_guidance(lens):
 def test_shown_crud_examples_are_accepted_by_parser(lens, qtbot, monkeypatch):
     from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     monkeypatch.setattr(
         QMessageBox,
@@ -342,7 +405,7 @@ def test_shown_crud_examples_are_accepted_by_parser(lens, qtbot, monkeypatch):
         lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
     )
     monkeypatch.setattr(QInputDialog, "getText", lambda *_args, **_kwargs: ("test-password", True))
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     examples = (
         "create user Alex Smith in the people OU, cn is alexsmith",
         'update entry cn=alexsmith,ou=people,dc=example,dc=com changes={"sn":[["replace","Smith"]]}',
@@ -368,14 +431,14 @@ def test_shown_crud_examples_are_accepted_by_parser(lens, qtbot, monkeypatch):
 def test_nlp_move_command(lens, qtbot, monkeypatch):
     from PyQt6.QtWidgets import QMessageBox
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     monkeypatch.setattr(
         QMessageBox,
         "question",
         lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
     )
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     tab.cmd_input.setText('move entry cn=Test,dc=example,dc=com to cn=NewName under ou=Users,dc=example,dc=com')
     tab._execute_command()
     qtbot.waitUntil(lambda: bool(lens.service.calls), timeout=1000)
@@ -386,6 +449,77 @@ def test_nlp_move_command(lens, qtbot, monkeypatch):
         "ou=Users,dc=example,dc=com",
     )
     tab.close()
+
+
+def test_unclear_crud_command_shows_copyable_query_and_example(qtbot, monkeypatch):
+    from PyQt6.QtWidgets import QDialog
+
+    from datasifter.ui.data_lens_tab import CommandClarificationDialog, DataLensTab
+
+    dialogs = []
+
+    def capture_dialog(dialog):
+        dialogs.append((dialog.original.toPlainText(), dialog.example.toPlainText()))
+        assert dialog.original.isReadOnly()
+        assert dialog.example.isReadOnly()
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(CommandClarificationDialog, "exec", capture_dialog)
+    tab = DataLensTab()
+    query = "create"
+    tab.cmd_input.setText(query)
+
+    tab._parse_and_execute(query)
+
+    assert dialogs == [("create", "create user Alex Smith in the people OU, cn is alexsmith")]
+    tab.close()
+
+
+def test_clarification_rewrite_is_editable_and_not_applied_until_selected(qtbot):
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QApplication
+
+    from datasifter.ui.data_lens_tab import CommandClarificationDialog
+
+    callbacks = []
+    dialog = CommandClarificationDialog(
+        "create", "create user example", "create someone",
+        lambda query, example, success, failure: callbacks.append((query, example, success, failure)),
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+    dialog.original.selectAll()
+    qtbot.keyClick(dialog.original, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+    assert QApplication.clipboard().text() == "create someone"
+    dialog.example.selectAll()
+    qtbot.keyClick(dialog.example, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+    assert QApplication.clipboard().text() == "create user example"
+    dialog.rewrite_button.click()
+    assert callbacks[0][:2] == ("create someone", "create user example")
+    assert not dialog.rewrite_button.isEnabled()
+    callbacks[0][2]("create user generated")
+    assert dialog.selected_command() == ""
+    dialog.draft.setText("create user reviewed")
+    dialog.use_draft.click()
+    assert dialog.selected_command() == "create user reviewed"
+    callbacks[0][3]("late failure")
+    assert "late failure" not in dialog.status.text()
+
+
+def test_clarification_reports_rewrite_failure_and_allows_retry(qtbot):
+    from datasifter.ui.data_lens_tab import CommandClarificationDialog
+
+    dialog = CommandClarificationDialog(
+        "delete", "delete entry example", "delete",
+        lambda _query, _example, _success, failure: failure("model unavailable"),
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+    dialog.rewrite_button.click()
+    assert "model unavailable" in dialog.status.text()
+    assert dialog.rewrite_button.isEnabled()
+    assert not dialog.use_draft.isEnabled()
+    dialog.close()
 
 
 @pytest.mark.parametrize(
@@ -422,15 +556,15 @@ def test_entry_action_buttons_use_highlighted_entry(
 ):
     from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     distinguished_name = "cn=selected,ou=people,dc=example,dc=com"
     lens.service.search_results = [{"dn": distinguished_name, "objectClass": ["person"]}]
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     qtbot.addWidget(tab)
-    directory_lens = tab.lens
-    qtbot.waitUntil(lambda: directory_lens.model.rowCount() == 1, timeout=1000)
-    directory_lens.view.setCurrentIndex(directory_lens.model.index(0, 0))
+    data_lens = tab.lens
+    qtbot.waitUntil(lambda: data_lens.model.rowCount() == 1, timeout=1000)
+    data_lens.view.setCurrentIndex(data_lens.model.index(0, 0))
 
     confirmations = []
     monkeypatch.setattr(
@@ -468,11 +602,11 @@ def test_entry_action_buttons_use_highlighted_entry(
 def test_refresh_tree_reloads_entries_and_preserves_highlighted_dn(lens, qtbot):
     from PyQt6.QtCore import Qt
 
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     distinguished_name = "cn=selected,ou=people,dc=example,dc=com"
     lens.service.search_results = [{"dn": distinguished_name, "objectClass": ["person"]}]
-    tab = DirectoryLensTab(lens.service)
+    tab = DataLensTab(lens.service)
     qtbot.addWidget(tab)
     tree = tab.lens
     qtbot.waitUntil(lambda: tree.model.rowCount() == 1, timeout=1000)
@@ -504,7 +638,7 @@ def profile():
 @pytest.fixture
 def lens(profile, qapp):
     service = MockLDAPService(profile)
-    return DirectoryLens(service, root_dn="dc=example,dc=com")
+    return DataLens(service, root_dn="dc=example,dc=com")
 
 
 def test_create_entry_triggers_worker_and_succeeds(lens, qtbot):

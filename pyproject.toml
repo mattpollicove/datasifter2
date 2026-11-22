@@ -17,6 +17,7 @@ dependencies = [
     "ldap3>=2.9.1",
     "keyring>=24.3",
     "cryptography>=41",
+    "pydantic>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +46,9 @@ version = {attr = "datasifter.__version__"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "live: runs against the non-production directories in tests/live_ldap.local.json and tests/live_ad.local.json",
+]
 
 [tool.ruff]
 line-length = 100

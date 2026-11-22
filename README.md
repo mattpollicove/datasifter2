@@ -9,18 +9,22 @@ before trying write operations.
 Original code is [MIT-licensed](./LICENSE). Dependencies and models have separate licenses;
 in particular, the installed PyQt6 distribution is GPL-3.0-only. See
 [third-party licensing obligations](./THIRD_PARTY_NOTICES.md) before distributing the app.
+The **Help → About DataSifter** dialog includes the [privacy notice](./PRIVACY.md), the full
+MIT license, and a link to GitHub Issues for support.
 
 DataSifter is a local-first LDAP desktop client. This implementation targets Phase 1 of
 [`datasifter2.0_spec.md`](./datasifter2.0_spec.md): LDAP directory workspaces and an optional
 offline llama.cpp assistant.
 
-**AI use:** Directory Lens optionally uses a user-approved local GGUF model through llama.cpp
-to draft LDAP search filters. Inference runs on your machine, using request text and schema
-attribute names rather than directory entry values. Model output can be inaccurate; review
-filters before executing searches. For AI-assisted software development practices, see
+**AI use:** Data Lens optionally uses a user-approved local GGUF model through llama.cpp
+to produce validated `search`, `proposed_mutation`, or `clarify` intents. Inference runs on
+your machine and uses request text plus structural schema names, never directory row values.
+Searches follow the existing AI confirmation setting (on by default). Mutation intents require
+a typed dry-run preview and explicit user confirmation; the model cannot apply changes.
+For AI-assisted software development practices, see
 [AI_DEVELOPMENT.md](./AI_DEVELOPMENT.md).
 
-Directory Lens supports **local GGUF model files only**, loaded through
+Data Lens supports **local GGUF model files only**, loaded through
 `llama-cpp-python`. Selection and loading reject other extensions and files without a GGUF
 header, even if renamed to `.gguf`. A GGUF header alone does not establish model compatibility
 or authenticity; llama.cpp must support the model architecture, and source approval and
@@ -29,8 +33,9 @@ are not supported.
 
 ## Current progress
 
-Status as of **2026-11-02**: **Phase 1 LDAP functionality is implemented and under
-active alpha testing**. This is not a production-readiness or interoperability certification.
+Status as of **2026-11-22**: **Phase 1 LDAP functionality and Data Lens internal phases 1-5
+are implemented and under active alpha testing**. This is not a production-readiness or
+interoperability certification.
 The [implementation plan](./plan.md) records the original Phase 1 work; the
 [specification](./datasifter2.0_spec.md) describes the broader vision, not a list of
 features all available today.
@@ -39,11 +44,12 @@ features all available today.
 
 | Area | Implemented capabilities |
 | --- | --- |
-| Profiles and credentials | Create/edit profiles, network and authentication checks, local JSON preferences, OS keyring integration, read-only profiles |
-| Directory Workbench | Paged DIT browsing, LDAP filter searches, attribute editing, schema-guided entry creation, delete, rename/move, password modification |
+| Profiles and credentials | Create/edit/delete profiles, network and authentication checks, local JSON preferences, OS keyring integration, read-only profiles |
+| Directory Workbench | Paged DIT browsing, LDAP filter searches, attribute editing, schema-guided entry creation, delete, rename/move, password modification, validated LDIF import/export |
 | Transport and safety | Plain LDAP warnings, StartTLS/LDAPS, custom CA/client certificates, TOFU approval and rotation checks, write confirmations |
 | Schema inspector | Object-class filtering with inherited attributes and progressive attribute-name search |
-| Directory Lens | Local GGUF selection/download/approval, integrity checks, model reuse, streamed filter generation, deterministic simple searches, filter review, model-change logging |
+| Data Lens | Local GGUF selection/download/approval, integrity checks, model reuse, schema-validated structured intents with one JSON repair attempt, reviewed searches, mutation dry-run previews, typed target session commands (connect, switch, disconnect, list targets, current target) |
+| Data Lens engine (phases 1-5) | UI-independent `datasifter.datalens` package: typed intents, backend-aware aliases, confirmed previews, read-only protection, sanitized audit events, structured help and actionable diagnostics |
 | Usability | Grouped settings, persistent AI enable/disable, Enter-to-generate, operational-attribute italics, search highlighting, cancellation and sanitized protocol logs |
 | Packaging | Windows standalone build workflow, version increments, generated bill of materials |
 
@@ -52,8 +58,9 @@ not mean every operation has been verified against a live server or every listed
 
 ### Testing evidence and current limitations
 
-- Most recent source validation: **219 tests passed** on Windows on 2026-11-02,
-  plus Ruff checks for the GGUF-only change and a Python syntax check for its inference adapter.
+- Most recent full-suite validation: **536 passed, 1 skipped** on Windows on 2026-11-22.
+  The AD password-over-LDAPS test is skipped by the local configuration; a separate run
+  with temporary port and hostname overrides passed against the lab's LDAPS endpoint.
 - Automated coverage includes configuration, LDAP service behavior, filters, certificates,
   workers, Qt UI interactions, model approval/download safeguards, and BOM generation.
   Model inference tests use fakes where appropriate; passing them is not a real-model benchmark.
@@ -62,8 +69,8 @@ not mean every operation has been verified against a live server or every listed
 - The previous Windows standalone build predates recent source changes. The current source
   has not been repackaged or revalidated as a standalone release; macOS/Linux builds are
   not certified.
-- Natural-language interpretation can be wrong. Review generated filters; complex requests
-  may require rephrasing or a manually written LDAP filter.
+- Natural-language interpretation can be wrong. Review search scope and every mutation preview;
+  complex requests may require rephrasing.
 
 ## Roadmap
 
@@ -116,50 +123,68 @@ delete, or move command, and confirm the requested operation.
 
 The llama.cpp package may need a platform-specific build toolchain. To run without AI support,
 install `-e ".[dev]"`; AI actions will report that the optional dependency or model is missing.
-**Directory Lens** is the local AI filter assistant. Open **Settings → Application settings**
-for grouped **Directory Lens**, **Safety**, and **Appearance** options. Disable Directory Lens
+**Data Lens** (formerly Directory Lens) is the request field in the Directory Workbench. It
+translates natural-language requests into validated search, proposed-mutation, or clarification
+intents with the optional local model, and manages the target session. Open **Settings → Application settings**
+for grouped **Data Lens**, **Safety**, and **Appearance** options. Disable Data Lens
 to hide its workspace panel and release the loaded model; re-enable it from the same screen.
 The approved model file is retained, and manual LDAP searches remain available. **Run request**
-is enabled for searches after a model is selected and approved, a directory is connected, a request
-is entered, and active operations have finished. Explicit CRUD commands are routed to their
-confirmed operation flow and require a writable connection. Press **Enter** to run the request;
+is enabled after a model is selected and approved, a directory is connected, a request is entered,
+and active operations have finished. A search is resolved to a typed LDAP search and follows the
+AI confirmation preference (on by default). A mutation is resolved to a typed dry-run preview;
+the request field applies it only after explicit confirmation, regardless of search preferences.
+The separate Directory Workbench controls retain their own confirmation flows. Press **Enter** to run the request;
 **Shift+Enter** inserts a new line. No font picker is provided; the application keeps the system
 font.
 
+Ambiguous or incomplete requests return a clarification instead of choosing a target or
+attribute. The model may misunderstand a request; review every search proposal and dry-run
+preview. Do not include passwords or other credentials in natural-language requests. Use the
+explicit credential form when a password is required.
+
+**Help → Data Lens help** lists supported requests, example phrases, effective built-in aliases,
+backend differences, and safety constraints in copyable text. Examples illustrate intent and
+are not a guarantee of how a particular GGUF model interprets a request. Directory schema and
+permissions still determine which attributes and operations are available.
+
+Data Lens accepts these target session commands, with or without a connection. They are matched
+locally against the whole request and never use the model, so no model needs to be selected:
+
+| Command | Result |
+| --- | --- |
+| `connect to <profile>` or `switch to <profile>` | Connects to a saved profile. An existing session is disconnected and its data cleared first. `connect` alone uses the selected or last connected profile. |
+| `disconnect` | Ends the current session, like the **Disconnect** button. |
+| `list targets` | Lists saved profiles and marks the connected and last connected ones. |
+| `current target` | Shows the connected profile, its base DN, and whether it is read-only. |
+
+A profile is matched by name, then host, then a unique part of its name; an ambiguous or unknown
+name is reported without changing the session. One target is connected at a time. Unsaved
+attribute changes and active operations still prompt before a session ends, and a missing bind
+password is still requested. Results appear below the request and in the **Data Lens log**.
+Searches and mutation previews stay unavailable until a connection has succeeded.
+
 Choose a local GGUF model with **Choose GGUF file** in application settings (or
-**Settings → Directory Lens → Choose local GGUF model**). DataSifter asks you to
+**Settings → Data Lens → Choose local GGUF model**). DataSifter asks you to
 confirm that you independently verified its approved source and record that source. It stores the
 model's SHA-256 digest and checks the file against it before inference. This is a local integrity
 check and operator attestation, not publisher authentication; obtain models from an organization-
-approved US, Japanese, or European source and verify them independently. Inference runs locally,
-streams generated text in the workspace,
-uses structural directory schema rather than entry values, and validates the completed filter before
-review or execution. The server's schema names are read once per connection; only core attributes
-and names related to the request (for example "phone" → `telephoneNumber`, `homePhone`, `mobile`)
-are sent, trimmed to fit the model's 4,096-token context. Simple requests such as
-"show fax, phone or mobile numbers with 732" are built directly, without the model, as
-`(|(facsimileTelephoneNumber=*732*)(telephoneNumber=*732*)(mobile=*732*))`; "starting with" and
-"ending with" become prefix and suffix matches. "In state PA" or "city = Erie" become equality
-matches (`(st=PA)`, `(l=Erie)`). Everyday words are mapped to schema attributes both in the
-prompt and in model output: state/province → `st`, city/town/location → `l`, zip/postcode →
-`postalCode`, country → `c`, company/organization → `o`, phone, fax, mobile, email, and similar;
-filters naming attributes absent from the schema are rejected with a message to rephrase.
-Search phrasing such as "lastname starting with the letter b" or "last name begins with b"
-becomes `(sn=b*)`; "first name" is also supported. "The letters", "the word", and "the digits"
-can introduce a search value, and "ends in" is a suffix match. Quote multiword values, for
-example `cn contains "Jane Doe"` becomes `(cn=*Jane Doe*)`. Quoted text is treated literally
-and LDAP-special characters are escaped. Unsupported extra conditions, incomplete phrases,
-or unknown attributes fall back to the model rather than being silently dropped.
-The **Directory Lens log** tab records, for this session only, model changes (previous/new file
-and approved SHA-256), enable/disable events, each request, and the exact prompt sent to the
-model (request text plus schema attribute names, never entry values), the model output, and the
-resulting filter or error; requests built without the model are noted as such. **Clear** empties
-the log. "Contains/including X" becomes a
-substring match (`*X*`), and a location such as "in ou People" becomes an RFC 4515 DN-component
-match (`(ou:dn:=People)`), which is added automatically if the model omits it.
+approved source and verify them independently. Inference runs locally, uses structural directory
+schema rather than entry values, and requests one JSON intent conforming to a strict Pydantic
+schema. Malformed JSON or schema violations trigger one bounded repair attempt; a second failure
+is reported instead of being treated as an intent. Only relevant object-class and attribute names
+(for example "phone" → `telephoneNumber`, `homePhone`, `mobile`) are sent, trimmed to fit the
+model's 4,096-token context. The directory resolver maps everyday terms, resolves names only when
+unambiguous, validates LDAP filters, and asks for clarification when information is missing.
+Search review shows the filter, base DN, scope, returned attributes, and result limit. Search
+results redact credential attributes. Mutation proposals use the typed resolver and display a
+read-only dry-run preview; the model has no call path to an LDAP write.
+
+The **Data Lens log** tab records, for this session only, model changes (previous/new file
+and approved SHA-256), enable/disable events, and the intent category processed. It does not
+retain the request, model prompt, or raw model response. **Clear** empties the log.
 
 **Download / select models** in application settings (also available under
-**Settings → Directory Lens**) opens a curated model manager. Each entry shows a
+**Settings → Data Lens**) opens a curated model manager. Each entry shows a
 short description, and the drop-down tooltip repeats it. The list below reflects the
 **eight models in the application catalog as of 2026-11-02**, not a list of all compatible
 GGUF models. All catalog files are pinned to an exact
@@ -185,7 +210,7 @@ revision, size, and SHA-256:
   depend on the runtime, context, and hardware. Download size is not total RAM usage.
 
 These are starting points, not measured LDAP-accuracy rankings. Real-model evaluation is
-still on the roadmap. Directory Lens currently uses a **4,096-token context** regardless
+still on the roadmap. Data Lens currently uses a **4,096-token context** regardless
 of a model's advertised maximum. Simple requests may bypass inference through the parser;
 a larger model will not fix a deterministic parser bug. Keep filter review enabled.
 Other compatible GGUF files can be selected locally, subject to the same approval and
@@ -222,10 +247,20 @@ Non-sensitive settings are stored under `%APPDATA%\\DataSifter` on Windows and
 system keyring and are not written to profile JSON. Optional private-key passphrases are also
 kept in the OS keyring. Profiles support anonymous, simple bind, and TLS-protected SASL EXTERNAL.
 
-Use **Add profile** or select a saved profile and choose **Edit profile** to configure credentials.
+Use **Add profile** to open the connection wizard: enter connection and authentication details,
+optionally configure TLS and run connection checks, then choose a Base DN and save. Use **Back**
+to revise an earlier step. Select a saved profile and choose **Edit profile** to edit it in one dialog.
+DataSifter selects the last successfully connected profile when it starts and uses it if you click
+**Connect** with no profile selected. It does not reconnect automatically.
 New profiles default to **Simple bind**; choose another authentication mode when needed. **List
 profiles** displays saved profile names, endpoints, transports, and authentication modes, and is
 disabled when no profiles are saved.
+Use **Delete profile** to remove the selected local profile. After confirmation, DataSifter
+deletes that profile's saved password and client-key passphrase from the OS keyring, its
+session-only bind password, and its profile-scoped TOFU certificate; it does not delete
+directory entries or user-supplied certificate/key files. Deleting the active profile first
+disconnects and requires resolving unsaved entry changes. If local cleanup fails, the profile
+remains saved and an error is shown; some associated local data may already have been removed.
 New profiles default to **Plain LDAP** on port 389; bind credentials are unencrypted in this
 mode, so use it only on a trusted network. Saved profiles retain their configured transport.
 Select **Simple bind** to enable the **Bind password** field. **Show password** reveals it locally;
@@ -234,16 +269,16 @@ keyring. If not saved, a password entered for a new profile is held in memory fo
 session; after restarting, Connect prompts for it. New profiles do not save passwords unless the
 keyring option is selected. Clearing a saved password removes it from the keyring. Saving edits to
 the active profile requires connecting again.
-The Show password and Save password options share one row in the profile dialog.
+The Show password and Save password options share one row in both flows.
 
-The **Add profile** and **Edit profile** dialogs include two independent diagnostics using
+The connection wizard and **Edit profile** dialog include two independent diagnostics using
 the current field values, including the entered bind password. No profile or credentials are
 saved by testing. A profile name and base DN are not needed for these tests; they are required
 when saving. Inputs and Save are disabled during a test; Cancel requests cancellation.
 **Cancel check** stops a running network or authentication check without closing the dialog.
 Tests are optional and do not gate saving. Changing settings clears the displayed test result.
-**Test connection** sits directly below Host/IP and Port. **Test authentication** sits directly
-below Bind DN and Bind password. After authentication succeeds, the dialog reads Root DSE
+In the wizard, both checks are on the security and connection checks step; the edit dialog
+places them near the corresponding fields. After authentication succeeds, the application reads
 Root DSE naming contexts and populates the editable **Base DN** dropdown, preferring the server's
 default context when advertised. The Root DSE query requests its available user and operational
 attributes so server-specific context attributes are not rejected by local schema validation.
@@ -251,7 +286,7 @@ Existing/manual selections are
 preserved. If the server advertises no contexts, enter a DN manually; discovery errors are
 reported as test failures. Changing connection or credential settings clears discovered options.
 
-For a first-use or changed TLS certificate in the dialog, verify and accept its fingerprint,
+For a first-use or changed TLS certificate, verify and accept its fingerprint,
 then click **Test authentication** again to perform the bind. Accepted draft trust is kept
 temporary until Save; canceling the dialog does not replace the saved profile's trust.
 
@@ -290,7 +325,9 @@ options are saved separately in the configuration. **Application settings → Sa
 With delete confirmation disabled, deletion is non-recursive; recursive deletion remains an
 explicit option in the enabled delete confirmation dialog.
 
-The filter editor highlights LDAP attribute names, operators, and boolean operators. Use
+The filter editor highlights LDAP attribute names, operators, and boolean operators.
+**Clear filter** resets it to `(objectClass=*)` and searches again; pending entry edits
+still require confirmation, and a failed search leaves the current directory view unchanged. Use
 **Schema inspector** and **Load directory schema** after connecting to display the server's
 object classes, required/optional attributes, and advertised attribute types.
 Select an **objectClass** to restrict the list to that class and its allowed attributes,
@@ -307,6 +344,31 @@ structure and DNs remain visible for diagnosis. Logs are displayed locally in th
 and persisted when launched through `python -m datasifter`, the `datasifter` command, or the
 standalone application.
 
+### LDIF import and export
+
+Use **Directory → Import LDIF change records** to validate and preview an LDIF file before
+applying it. Content records and `add`, `modify`, `delete`, `modrdn`, and `moddn` change
+records are applied in file order after explicit confirmation. Validation covers LDIF v1
+record syntax, folded lines, base64 values, distinguished names, and supported change
+operations; add records must include a non-empty `objectClass`. Files containing malformed
+records are rejected before any directory changes are sent. The profile's read-only guard
+also blocks imports.
+
+LDAP does not make an arbitrary multi-record import atomic. If the server rejects a record
+or the operation is canceled, earlier records or earlier sub-operations in a modify record
+may already have succeeded; the error reports the record position and completed-record count.
+After a completed or failed import, DataSifter attempts to refresh the directory that received
+the changes, not a different profile selected in the toolbar.
+LDIF controls, URL-valued attributes,
+and change types other than the listed operations are rejected rather than ignored. Format
+validation cannot predict whether the connected server's schema or access controls will
+accept each change.
+
+Use **Directory → Export selected entry as LDIF** to export only the highlighted entry,
+not its descendants. Export reads the current server values, excludes operational
+attributes, validates the generated LDIF, and writes it atomically. The confirmation warns
+that returned attributes may contain sensitive directory data; protect the exported file.
+
 ### Persistent diagnostics
 
 On Windows, the log is `%APPDATA%\DataSifter\logs\datasifter.log`. On other platforms it is
@@ -315,17 +377,25 @@ retaining three backups (`datasifter.log.1` through `.3`). No logs are stored in
 If the log cannot be created, startup reports the error rather than running without diagnostics.
 
 The file records sanitized LDAP protocol events, application start/stop, worker failures,
-uncaught Python exceptions (including Qt callback exceptions), and NLP filter-generation
+uncaught Python exceptions (including Qt callback exceptions), and NLP intent-generation
 outcomes. Exception diagnostics contain exception types and file/function/line locations,
 including chained exceptions, but omit exception messages, source lines, and local variables
 because these can contain passwords. Raw NLP requests, model prompts, generated filters, and
-model responses are **not persisted**; the Directory Lens log still displays them in memory.
-Do not enter passwords into the search prompt. Clearing an in-app log does not delete log files.
+model responses are **not persisted**; the in-app Data Lens log records only the intent category.
+Do not enter passwords into the request field. Clearing an in-app log does not delete log files.
 
 These are diagnostic logs, not a complete audit trail or native-crash dump. DNs and directory
 structure remain visible, so treat log files as sensitive and review them before sharing.
 An unexpected Python error displays the diagnostic path; more detailed exception messages may
 still appear in the terminal.
+
+Data Lens confirmed mutations additionally append structured events to
+`logs/datalens-audit.jsonl` under the profile configuration directory. Events record a timestamp,
+correlation ID, operation, backend and outcome; they omit DNs, attribute values, prompts,
+credentials and exception messages. This file is not rotated automatically. It covers only
+Data Lens mutation proposals, not other application or directory activity, and is not tamper-proof.
+An audit write failure blocks execution before submission; if an outcome cannot be recorded
+after submission, DataSifter reports that the directory must be checked before retrying.
 
 Canceling active operations closes their LDAP sockets and signals every current worker. Cancellation
 is passed to network tests, certificate inspection, authentication, schema reads, entry reads, and
@@ -337,6 +407,123 @@ The schema inspector displays object classes and their required/optional attribu
 attribute OIDs, syntax identifiers, descriptions, matching rules, and single-value constraints when
 advertised by the directory. The LDAP filter editor highlights attribute names, operators, and
 boolean operators.
+
+## Data Lens engine
+
+`datasifter.datalens` is the typed directory layer called by the Data Lens request UI and,
+later, an API or MCP server. It has no user-interface dependencies. The Data Lens-specific
+phases 1 (typed operations), 2 (aliases and clarification), 3 (local GGUF intents), 4
+(confirmation, audit and service boundary), and 5 (help and remediation) are implemented.
+Mutation previews are rechecked
+immediately before execution. LDAP does not make the preview and write atomic; concurrent
+changes may still occur, and recursive deletion may partially complete if a later delete fails.
+
+| Module | Contents |
+| --- | --- |
+| `datalens.models` | Pydantic models: `SearchSpec`, `SearchResult`, `DirectoryEntry`, `AttributeChange`, the create/update/delete/move plans, `DryRunResult`, `MutationResult`, `ClarificationPrompt` |
+| `datalens.adapters` | `StandardLdapAdapter`, `ActiveDirectoryAdapter`, `create_adapter`, `detect_backend` |
+| `datalens.aliases` | `AliasRegistry`: everyday phrases mapped to concepts, and each concept to its candidate attributes on Standard LDAP and on Active Directory |
+| `datalens.resolver` | `DirectoryResolver`: terms to attributes, names to entries, and requests in everyday terms to a search spec or a mutation plan, or to clarification questions |
+| `datalens.intents` | Strict Pydantic schemas for `search`, `proposed_mutation`, and `clarify`; preparation routes validated intents through `DirectoryResolver` and never applies mutations |
+| `datalens.service` | UI-independent confirmed mutation execution and metadata-only local audit events |
+| `datalens.help` | Versioned structured catalog of intents, examples, aliases, backend differences and safety constraints |
+| `datalens.schema` | `DirectorySchema`: the server's object classes and attribute types |
+| `datalens.dn` | DN and RDN parsing, comparison and parent/descendant checks |
+| `datalens.errors` | `ReadOnlyDirectoryError`, `MutationRejectedError`, `ConfirmationRequiredError` |
+
+The adapters reuse `LDAPService` for transport, so TLS validation, certificate pinning,
+cancellation, paging and the redacted protocol log are unchanged.
+
+`get_help_catalog()` returns a Pydantic catalog that callers can serialize with
+`model_dump(mode="json")` or inspect with `HelpCatalog.model_json_schema()`. Pass an
+`AliasRegistry` to include site-specific aliases. This is an in-process Python API, not an
+HTTP or MCP server. `datasifter.remediation.translate_error()` maps typed LDAP results,
+directory preview issues and model failures to structured categories, codes and next steps.
+Unknown errors retain their message without guessing a cause. The UI displays actionable
+diagnostics in copyable text; directory server logs may contain additional detail.
+
+```python
+from datasifter.datalens import DirectoryBackend, SearchSpec, create_adapter
+from datasifter.directory.service import LDAPService
+
+adapter = create_adapter(LDAPService(profile, password), DirectoryBackend.STANDARD_LDAP)
+people = adapter.search_entries(SearchSpec(filter=adapter.user_filter("alexsmith"), size_limit=50))
+
+dn = "cn=alexsmith,ou=People,dc=example,dc=com"
+preview = adapter.delete_entry(dn)                      # dry run: nothing is written
+if preview.preview.can_apply:
+    adapter.delete_entry(dn, dry_run=False, confirmed=True)
+```
+
+- **Backend choice:** pass `DirectoryBackend.STANDARD_LDAP` or `ACTIVE_DIRECTORY`.
+  `detect_backend(service)` reads the RootDSE when the kind of server is not known.
+- **Search:** `search_entries` pages through results and stops at `size_limit`; `truncated`
+  reports whether more entries matched.
+- **Changes:** `create_entry`, `update_entry`, `delete_entry` and `move_entry` return a
+  preview by default. The preview uses read-only lookups to check that the target and its
+  parent exist, that the destination is free, and that the server schema knows the object
+  classes and attributes and has its required attributes. A change is sent only with
+  `dry_run=False` and `confirmed=True`, and only when the preview has no error.
+- **Safety limits:** changes must stay inside the profile's base DN. The base DN and the
+  account the profile signs in with cannot be deleted. A subtree is deleted only with
+  `recursive=True`, and the preview lists every DN first. A read-only profile, or an adapter
+  created with `read_only=True`, refuses changes before opening a connection.
+- **Secrets:** results and errors show password attributes as `<redacted>`.
+- **Active Directory:** names users, groups and containers by `CN`; refuses writes to
+  `memberOf` and other system attributes; decodes `userAccountControl`; warns that an account
+  created without a password is disabled; writes `unicodePwd` in the required encoding and
+  only over LDAPS or StartTLS; protects critical system objects.
+- **Limits:** a preview is advisory; access control or a concurrent change can still make
+  the server refuse. Each lookup opens its own connection. The application imports the typed
+  engine, but standalone builds have not yet been rebuilt or clean-target validated.
+
+### Everyday terms and clarification
+
+`DirectoryResolver` accepts requests the way people phrase them and never guesses. Each step
+returns a definite result or a `ClarificationPrompt` with a reason, a question and, where
+possible, the choices.
+
+```python
+from datasifter.datalens import DirectoryResolver, EntryKind
+
+resolver = DirectoryResolver(adapter)
+prepared = resolver.prepare_update(
+    "Alex Smith",
+    [{"term": "job title", "values": "Engineer"}, {"term": "reports to", "values": "Jane Doe"}],
+    kind=EntryKind.USER,
+)
+if prepared.ready:                     # nothing to ask, and the preview found no error
+    adapter.execute(prepared.plan, dry_run=False, confirmed=True)
+else:
+    for prompt in prepared.clarifications:
+        print(prompt.reason, prompt.question, [option.label for option in prompt.options])
+```
+
+- **Attribute terms:** "email", "job title", "reports to", "username" and about forty other
+  concepts map to the attribute that holds them on the connected backend, for example
+  `uid` on Standard LDAP but `sAMAccountName` or `userPrincipalName` on Active Directory,
+  and `departmentNumber` or `ou` against `department`. Candidates the server's schema does
+  not define are dropped. An exact attribute name is accepted in any letter case.
+- **Broad terms:** "phone" covers the work, mobile and home numbers. A search matches any
+  of them. A change asks which one is meant.
+- **Names:** a user, group or organizational unit is found by DN or by exact name. One match
+  resolves. Several matches, and near matches when nothing matches exactly, are listed as
+  choices and never picked automatically. Values of attributes that point at other entries
+  (`manager`, group members) are resolved the same way.
+- **Missing information:** creating an entry asks for its name, its location and the
+  attributes the schema requires; a move asks for a destination; deleting an entry that has
+  subordinate entries asks whether to include them.
+- **Account state:** "disabled", "active" and "locked" use `userAccountControl` and
+  `lockoutTime` on Active Directory, and whichever of `nsAccountLock`,
+  `ds-pwp-account-disabled`, `loginDisabled` and `pwdAccountLockedTime` the server's schema
+  defines on Standard LDAP. When there is none, the engine says so.
+- **Site-specific terms:** `AliasRegistry.register(AttributeConcept(...))` adds a concept.
+  A phrase that already belongs to another concept is refused unless `replace=True`.
+- **Plans and secrets:** `prepared.plan` is what `adapter.execute` runs and can hold a
+  password, so it is excluded from `repr` and from serialized output; `prepared.preview`
+  is the display-safe view.
+- **Existing alias tables:** the Data Lens request field still uses the tables in
+  `directory/filters.py`. A test keeps the registry in agreement with them.
 
 ## LDAP transport
 
@@ -351,6 +538,11 @@ python -m pytest
 
 The automated tests do not require a live LDAP server or model. They do not replace deployment
 validation against the directory products and certificate configurations used in your environment.
+The Data Lens adapters are tested against ldap3's in-memory mock directory with offline OpenLDAP
+and Active Directory schemas.
+Optional live tests in `tests/test_live_ldap.py` and `tests/test_live_datalens.py` run against
+non-production directories when local targets are configured, and are skipped otherwise; see
+[CONTRIBUTING.md](./CONTRIBUTING.md#live-ldap-tests).
 Build and validate the standalone application separately on each target OS; the PyInstaller
 configuration and native dependencies are platform-specific.
 

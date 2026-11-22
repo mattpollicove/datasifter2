@@ -1,7 +1,7 @@
 # DataSifter bill of materials
 
-Application version: **0.006**
-Generated: 2026-11-03T01:37:50.078008+00:00
+Application version: **0.010**
+Generated: 2026-11-22T18:30:17.017773+00:00
 
 Generated from the project manifest, installed distribution metadata, source files,
 and available packaged native binaries. Exact versions reflect this build environment.
@@ -20,6 +20,7 @@ Dependency relationships and complete SHA-256 hashes are in [bom.json](./bom.jso
 | Library | Installed version | Dependency groups | License metadata |
 |---|---|---|---|
 | altgraph | 0.17.5 | packaging | MIT |
+| annotated-types | 0.8.0 | runtime | MIT |
 | arrow | 1.4.0 | bom | Not declared |
 | attrs | 26.1.0 | bom | MIT |
 | boolean.py | 5.0 | bom | BSD-2-Clause |
@@ -55,6 +56,8 @@ Dependency relationships and complete SHA-256 hashes are in [bom.json](./bom.jso
 | py-serializable | 2.1.0 | bom | Apache-2.0 |
 | pyasn1 | 0.6.5 | runtime | BSD-2-Clause |
 | pycparser | 3.12 | runtime | BSD-3-Clause |
+| pydantic | 2.14.4 | runtime | MIT |
+| pydantic_core | 2.50.5 | runtime | MIT |
 | Pygments | 2.21.0 | dev | BSD-2-Clause |
 | pyinstaller | 6.22.3 | packaging | GPLv2-or-later with a special exception which allows to use PyInstaller to build and distribute non-free programs (including commercial ones) |
 | pyinstaller-hooks-contrib | 2026.9 | packaging | Not declared |
@@ -74,7 +77,8 @@ Dependency relationships and complete SHA-256 hashes are in [bom.json](./bom.jso
 | setuptools | 84.2.1 | build-system, packaging | MIT |
 | six | 1.17.0 | bom | MIT |
 | sortedcontainers | 2.4.0 | bom | Apache 2.0 |
-| typing_extensions | 4.16.0 | dev, local-ai | PSF-2.0 |
+| typing-inspection | 0.4.5 | runtime | MIT |
+| typing_extensions | 4.16.0 | dev, local-ai, runtime | PSF-2.0 |
 | tzdata | 2026.6 | bom | Apache-2.0 |
 | uri-template | 1.3.0 | bom | MIT License |
 | webcolors | 25.10.0 | bom | BSD-3-Clause |
@@ -89,37 +93,71 @@ their exact contents. See the specification and README for feature descriptions.
 |---|---|
 | [src/datasifter/__init__.py](./src/datasifter/__init__.py) | source |
 | [src/datasifter/__main__.py](./src/datasifter/__main__.py) | source |
+| [src/datasifter/_build_stamp.py](./src/datasifter/_build_stamp.py) | source |
 | [src/datasifter/ai/__init__.py](./src/datasifter/ai/__init__.py) | source |
 | [src/datasifter/ai/local_model.py](./src/datasifter/ai/local_model.py) | source |
 | [src/datasifter/ai/model_catalog.py](./src/datasifter/ai/model_catalog.py) | source |
 | [src/datasifter/build_info.py](./src/datasifter/build_info.py) | source |
 | [src/datasifter/build_version.py](./src/datasifter/build_version.py) | source |
 | [src/datasifter/config.py](./src/datasifter/config.py) | source |
+| [src/datasifter/datalens/__init__.py](./src/datasifter/datalens/__init__.py) | source |
+| [src/datasifter/datalens/adapters/__init__.py](./src/datasifter/datalens/adapters/__init__.py) | source |
+| [src/datasifter/datalens/adapters/active_directory.py](./src/datasifter/datalens/adapters/active_directory.py) | source |
+| [src/datasifter/datalens/adapters/base.py](./src/datasifter/datalens/adapters/base.py) | source |
+| [src/datasifter/datalens/adapters/standard.py](./src/datasifter/datalens/adapters/standard.py) | source |
+| [src/datasifter/datalens/aliases.py](./src/datasifter/datalens/aliases.py) | source |
+| [src/datasifter/datalens/dn.py](./src/datasifter/datalens/dn.py) | source |
+| [src/datasifter/datalens/errors.py](./src/datasifter/datalens/errors.py) | source |
+| [src/datasifter/datalens/help.py](./src/datasifter/datalens/help.py) | source |
+| [src/datasifter/datalens/intents.py](./src/datasifter/datalens/intents.py) | source |
+| [src/datasifter/datalens/models.py](./src/datasifter/datalens/models.py) | source |
+| [src/datasifter/datalens/resolver.py](./src/datasifter/datalens/resolver.py) | source |
+| [src/datasifter/datalens/schema.py](./src/datasifter/datalens/schema.py) | source |
+| [src/datasifter/datalens/service.py](./src/datasifter/datalens/service.py) | source |
 | [src/datasifter/diagnostics.py](./src/datasifter/diagnostics.py) | source |
 | [src/datasifter/directory/__init__.py](./src/datasifter/directory/__init__.py) | source |
 | [src/datasifter/directory/filters.py](./src/datasifter/directory/filters.py) | source |
+| [src/datasifter/directory/ldif.py](./src/datasifter/directory/ldif.py) | source |
 | [src/datasifter/directory/service.py](./src/datasifter/directory/service.py) | source |
 | [src/datasifter/directory/worker.py](./src/datasifter/directory/worker.py) | source |
+| [src/datasifter/remediation.py](./src/datasifter/remediation.py) | source |
 | [src/datasifter/security/__init__.py](./src/datasifter/security/__init__.py) | source |
 | [src/datasifter/security/certificates.py](./src/datasifter/security/certificates.py) | source |
+| [src/datasifter/session_commands.py](./src/datasifter/session_commands.py) | source |
 | [src/datasifter/ui/__init__.py](./src/datasifter/ui/__init__.py) | source |
-| [src/datasifter/ui/directory_lens.py](./src/datasifter/ui/directory_lens.py) | source |
-| [src/datasifter/ui/directory_lens_tab.py](./src/datasifter/ui/directory_lens_tab.py) | source |
+| [src/datasifter/ui/about_dialog.py](./src/datasifter/ui/about_dialog.py) | source |
+| [src/datasifter/ui/data_lens.py](./src/datasifter/ui/data_lens.py) | source |
+| [src/datasifter/ui/data_lens_tab.py](./src/datasifter/ui/data_lens_tab.py) | source |
 | [src/datasifter/ui/main_window.py](./src/datasifter/ui/main_window.py) | source |
 | [src/datasifter/ui/model_dialog.py](./src/datasifter/ui/model_dialog.py) | source |
 | [src/datasifter/ui/settings_dialog.py](./src/datasifter/ui/settings_dialog.py) | source |
 | [tools/generate_bom.py](./tools/generate_bom.py) | source |
+| [tests/conftest.py](./tests/conftest.py) | test |
+| [tests/datalens_support.py](./tests/datalens_support.py) | test |
 | [tests/test_bom.py](./tests/test_bom.py) | test |
 | [tests/test_build_info.py](./tests/test_build_info.py) | test |
 | [tests/test_build_version.py](./tests/test_build_version.py) | test |
 | [tests/test_certificates.py](./tests/test_certificates.py) | test |
 | [tests/test_config.py](./tests/test_config.py) | test |
+| [tests/test_data_lens.py](./tests/test_data_lens.py) | test |
+| [tests/test_datalens_adapters.py](./tests/test_datalens_adapters.py) | test |
+| [tests/test_datalens_help.py](./tests/test_datalens_help.py) | test |
+| [tests/test_datalens_intents.py](./tests/test_datalens_intents.py) | test |
+| [tests/test_datalens_models.py](./tests/test_datalens_models.py) | test |
+| [tests/test_datalens_resolver.py](./tests/test_datalens_resolver.py) | test |
+| [tests/test_datalens_service.py](./tests/test_datalens_service.py) | test |
+| [tests/test_delete_identifier.py](./tests/test_delete_identifier.py) | test |
+| [tests/test_delete_user.py](./tests/test_delete_user.py) | test |
 | [tests/test_diagnostics.py](./tests/test_diagnostics.py) | test |
-| [tests/test_directory_lens.py](./tests/test_directory_lens.py) | test |
 | [tests/test_directory_service.py](./tests/test_directory_service.py) | test |
 | [tests/test_filters.py](./tests/test_filters.py) | test |
+| [tests/test_ldif.py](./tests/test_ldif.py) | test |
+| [tests/test_live_datalens.py](./tests/test_live_datalens.py) | test |
+| [tests/test_live_ldap.py](./tests/test_live_ldap.py) | test |
 | [tests/test_local_ai.py](./tests/test_local_ai.py) | test |
 | [tests/test_model_catalog.py](./tests/test_model_catalog.py) | test |
+| [tests/test_remediation.py](./tests/test_remediation.py) | test |
+| [tests/test_session_commands.py](./tests/test_session_commands.py) | test |
 | [tests/test_ui.py](./tests/test_ui.py) | test |
 | [tests/test_worker.py](./tests/test_worker.py) | test |
 | [datasifter.spec](./datasifter.spec) | build |
@@ -151,46 +189,45 @@ third-party versions/licenses require vendor build information and are not guess
 | `dist/DataSifter 2.0/_internal/_uuid.pyd` | `a3380826957922fae7350f5ea64fface688bf55c79e086823a4b1d50455a9bfa` |
 | `dist/DataSifter 2.0/_internal/_wmi.pyd` | `0650bf237b3f556ba844ba372fef6de1b65d618a608014405360aef83f8a4e34` |
 | `dist/DataSifter 2.0/_internal/_zstd.pyd` | `a977471edf7b6712a9e89ada98b79b1973c79740632f820b67365f242b5e05cc` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-console-l1-1-0.dll` | `a117b9488bd6111a7f77677830f3af5f6312a1f39d39927abe824375a4dd92fa` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-datetime-l1-1-0.dll` | `6313c373d4330e4acfa8e1e06f63bcd7ed34f94807ebeb856e6ca3b6f27d6f85` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-debug-l1-1-0.dll` | `c2fe516dd487b6030e60511f0d81f95183d32c5fc5fe98d8ea144c34781fc003` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-errorhandling-l1-1-0.dll` | `c99233e0c5a92f4bddf4fa8ffbdd9d75265b69c2096591b2016fa0ee4268c06a` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-fibers-l1-1-0.dll` | `36ffe216b07d3ad4d00a1e84f5fe640789a7e600b082c4f43e78be54c5f20505` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-file-l1-1-0.dll` | `5b7bc067babca352cdb283373770fe7da085226d6f024dee17664226b21f2962` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-file-l1-2-0.dll` | `f113a7b359889f87158e27a882930d73cc3a9df7f73216274e7fe64075ba4a14` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-file-l2-1-0.dll` | `7dba105af76154d437fd0c1f942fccc86e481e1d2e9a3f7ea767eb7b0122eafa` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-handle-l1-1-0.dll` | `53a4ddc354cc6b264a722833f402301009fd4a9091afe1babdd7144adc66f3e7` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-heap-l1-1-0.dll` | `c605856f77e404b15940cc17ef09eff274939db1bb97d4b22278b1cf75c41096` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-interlocked-l1-1-0.dll` | `f5e2ee1b6b2abd9695ccc72a493432bceef2806bfb6ac97e3eb333b99b7a2ffb` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-libraryloader-l1-1-0.dll` | `daf7d8310ed34a97ca36561833c4668e101200f95d42d2452b85527c5cea101b` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-localization-l1-2-0.dll` | `c4e59f279fa6a0782212a878ea3eaf071050b821c6bb8e196c20d06ba0b32309` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-memory-l1-1-0.dll` | `f6e56efddb200ab4d44318c3fd8801a3b82e37eb815f26df4b991ac85b9f7d31` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-namedpipe-l1-1-0.dll` | `9ae18f8d83027c6bc35da51d9278f862148fec5b003f49fc73c31b4420a016b2` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-processenvironment-l1-1-0.dll` | `84ddf1c1db481339987cf099078ec4494c3c377c0299a46ae87c0ac2bbab04bc` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-processthreads-l1-1-0.dll` | `c6110674f118b5eeeff5babb7d584b63f3d4c762cf7734969bc6aaaeccc0b408` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-processthreads-l1-1-1.dll` | `e220b4af54606ae96e808f562c43b1fe767496b05a3cb084a9315033378fee68` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-profile-l1-1-0.dll` | `d5b8c1b9251059fd8cdccd57b564aa406f216f297c01c6e3fbb1cf71b1e3f32f` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-rtlsupport-l1-1-0.dll` | `627cb3973cc66612a69f8a64e6caca8944b0a93e337487d2bd97eab50242d699` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-string-l1-1-0.dll` | `0f1b5ea355da93cbe7cb75380c9062f8937d94d5c486ef33dfdd6b4bdde04e6d` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-synch-l1-1-0.dll` | `611d898dcb1f710e2b1769db1729bbdd95602c9b8650f6bf2f572fcfebf96d19` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-synch-l1-2-0.dll` | `0c47108194cea7d549af81f226b6cc49d242daf2d9bdffb3faebdf9fe67bb148` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-sysinfo-l1-1-0.dll` | `8482e96387aa67faaf5008094293743a374212b8067561d5813976b00013ef72` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-timezone-l1-1-0.dll` | `97187cf4c59f08b0d5e731d08aba14b4e0e3056d804143919fad8b3549e979f0` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-core-util-l1-1-0.dll` | `db8ae9a98e8d414991a4831e2ea47e9530b854ea423806caa2ec9054e839da08` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-conio-l1-1-0.dll` | `f34f0b3b865e1905e03df37b55537a04a3dd64d7efe8e02dacc5cdd31c7f559f` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-convert-l1-1-0.dll` | `a23f79dea170f13580f1f6fa79e287289f61d9b767a06c2f759428150c1d0e2d` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-environment-l1-1-0.dll` | `b73d0cb7f26c5975ff749f93b20d49032d8c31a6aba5093bad16519251b481bd` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-filesystem-l1-1-0.dll` | `2ef6bf444bc61eeceb1207d1dad79be5e4eb28984a80c49bdbb2ad65c2cea875` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-heap-l1-1-0.dll` | `1e913633caf31bc18faaea205569694b358c72c17dc93735c492ee40f7dc7e84` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-locale-l1-1-0.dll` | `7b66fa037fd3f71371b3ad9967f2cb3bf112c8663b90c0e76ceec8bd6d594a15` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-math-l1-1-0.dll` | `cb6629ffac613c87224ac7f0135f144e8daf9b03886019cf112c018de3c24be8` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-private-l1-1-0.dll` | `ca27302931e60202caee6f54fb07d8796a748f58629d83f6272636a7e02da34b` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-process-l1-1-0.dll` | `c570c8156d0dbb5a564c2e67e11466e5a2d154baaaf3e0128370cc45edc2cd43` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-runtime-l1-1-0.dll` | `b0981bf692102f9e35fcb1b6c5794bb428da1bbf91d6b611514b0c6fb3d2d401` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-stdio-l1-1-0.dll` | `3d3e2ac61d553a87e8756b595f0accbcce0d9cbbee988bf5bb054ddc7b0abb70` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-string-l1-1-0.dll` | `53e0c388e407fde47b29189e2fefef7781c38d33748acff7892d078735c64a45` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-time-l1-1-0.dll` | `d45cbd09183298eae8a83deda10ef3f33950c55f98d8c23f57080db63dbdf7dd` |
-| `dist/DataSifter 2.0/_internal/api-ms-win-crt-utility-l1-1-0.dll` | `d33eff37f70c7a4b8a69b744087c5be130171eb886ebb31f6757dde1add0b58f` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-console-l1-1-0.dll` | `e3abc5573ea5b843fb0c135cd00509ccf5b80f03b8a12b68c9ee1dfd8464bbbb` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-datetime-l1-1-0.dll` | `6266642828320f2d9d29f9e607323bf53f8b69d5d59cb4e01e3a8a07a3eb813c` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-debug-l1-1-0.dll` | `78265f8adf9e1514d8abdaeee25a91428051c25df5930e1300568cf658ebd5e3` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-errorhandling-l1-1-0.dll` | `05a60a7d2bf7a2dba1d47f71735918ca13510959cf7339965c94083bb06aa490` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-file-l1-1-0.dll` | `8943d3489417ed3aa7380c787c7d3278574de0a65940bb4e6a696f899abf612a` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-file-l1-2-0.dll` | `857a9259ca82d06e50d5c34974912af8450e7dd04968c091c721301e5e118f77` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-file-l2-1-0.dll` | `8d15c0d990bf6695aa0d4069aaa97116e5a30ba141567f6340de82014b6968bc` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-handle-l1-1-0.dll` | `109c0e7853ad59a51e126dbd63c62a8afd94acc0084bdaf8a0bf0bea2e53582e` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-heap-l1-1-0.dll` | `9e28d6bb6f9aa311ac17df663d453de435ab70ffcdf6d86791975bce27ba4190` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-interlocked-l1-1-0.dll` | `37f759c01649e4cb9f3dc93c498a41c130747e52c4d203dc4a89408e70d7159d` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-libraryloader-l1-1-0.dll` | `25db9a5ab516d776a39154db8ca1ec1459809f7e595b8af1c39134dc25d342b6` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-localization-l1-2-0.dll` | `1c200be45b4b241fd3b97911c286911787264fe63be33daa7a002d19d089788f` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-memory-l1-1-0.dll` | `15cbe13c1328b6351881615cfbf6ff4bfc842743bec407890141a22eddb9c667` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-namedpipe-l1-1-0.dll` | `757ded78500d71305e2be3df2f48bc5002779af6c535529bac69f174f9fe1e93` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-processenvironment-l1-1-0.dll` | `cb2c570fc013a8ad37602c46a218e68595599b8c147a8a3a02bb878dd84f5a17` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-processthreads-l1-1-0.dll` | `8696856e0ab4170c02ae4487b4e50671e070fe18a64063243550d3b952778cb4` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-processthreads-l1-1-1.dll` | `1778b2c4b0e80b34bf69fbffc85c2c5ca99407ae47fc499274c633817607352f` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-profile-l1-1-0.dll` | `2ac40c7f94b88ce81be001e0c5c615dea585ba87811a75cc9d299cfa4ee67b69` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-rtlsupport-l1-1-0.dll` | `e76b5ec82f9230f4016bf2f4deed40af24a9953e8d35fa035aceb7a56c10396e` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-string-l1-1-0.dll` | `53f459f81513fe69c0db6fe506589410acb7e886571217e0df11c62826e3fd1c` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-synch-l1-1-0.dll` | `f7eb1eeaf50c6c33a39d194fbc34177f8eebd38582867b29835180da44f07dff` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-synch-l1-2-0.dll` | `c71d781b40613cebcd8a7cdd643eb4cf87de1e8c1438c1c3908f6447d399471f` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-sysinfo-l1-1-0.dll` | `88a1194b38f00a9e0fb3297c30b9597c3422a61ebb5e648cfd4611e3546db709` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-timezone-l1-1-0.dll` | `db2326442cf965d4727fc994f858a2e589479b87e0d56ef92ad995d97b16e6be` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-core-util-l1-1-0.dll` | `c950da939965550dfc51af803fb17ecb927d47ac4ea1772456c52c017154f228` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-conio-l1-1-0.dll` | `2858c3beb2462034e933b07928afc2e1e22c0f413518ff56740c5dcbaa8f0def` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-convert-l1-1-0.dll` | `3a1bbb529114cfd1d627e5572115c78f11b7a3357cb170aff2d33a165b30d62d` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-environment-l1-1-0.dll` | `3c6578465af434d2df087908728a478b012c74981ddf1f0212fca99629a6f139` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-filesystem-l1-1-0.dll` | `7a2f4c1bbd163afb03396cfdbc85e6a656ab7a4372f772c3427fe19557657e7b` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-heap-l1-1-0.dll` | `5d5370e8d958392ad027437826c222f52beab5beb1385d767e288bcd484eb163` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-locale-l1-1-0.dll` | `4c6edace5e1f856480f7423326cd2e4a34bf09fbb2cffb4e335e880409d4cf7c` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-math-l1-1-0.dll` | `c0e38a848661e6a222da08eb29d92d7606056c816253caed51a619190b7706b5` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-private-l1-1-0.dll` | `0fd0138f65cd9e31e44fb5768217f5b31b374e31db53427c6b39adcbb8b4e5c2` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-process-l1-1-0.dll` | `6c3a236a8e74e7d57896a749a6766db82ff3371005005ed700b90c7975e4f45f` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-runtime-l1-1-0.dll` | `cfca3fcf7f09d1a5966028a1c0347223612496ccb0280978589c269c4867642d` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-stdio-l1-1-0.dll` | `928a86deccfb4fab9e869244421c63996ee1d8ef9685009ce41814661e7118be` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-string-l1-1-0.dll` | `76c31b7769f645146379a8dfdd334c2e4b0041a090dae84373570d4c4788e4ff` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-time-l1-1-0.dll` | `953d572c4918b2bc1486501a73e62509b5b61f2eb6f781c066b3eb72c14fee35` |
+| `dist/DataSifter 2.0/_internal/api-ms-win-crt-utility-l1-1-0.dll` | `6b9c38e18a2f8888a07ae3006133f102fb9dc391d5f1c7496a402eee4181858c` |
 | `dist/DataSifter 2.0/_internal/cryptography/hazmat/bindings/_rust.pyd` | `4ee475cea79ddf074daf11ce0acc997101b3ebf49471d991c3695639994ff32a` |
 | `dist/DataSifter 2.0/_internal/libcrypto-3.dll` | `75495fe0e079ab00d49be740d3c710a0b94e3f74f9648cb7cc9f768fc7f52319` |
 | `dist/DataSifter 2.0/_internal/libffi-8.dll` | `eff52743773eb550fcc6ce3efc37c85724502233b6b002a35496d828bd7b280a` |
@@ -247,11 +284,11 @@ third-party versions/licenses require vendor build information and are not guess
 | `dist/DataSifter 2.0/_internal/python3t.dll` | `c4c1db006228553e4b728b7856b74a007384e608c7b07e6ae8e0d8251d077e5b` |
 | `dist/DataSifter 2.0/_internal/select.pyd` | `d39e00967809d2d2cf8aea78f6fd39923cfb4ad426ccd19bbfe7163020dafffe` |
 | `dist/DataSifter 2.0/_internal/sqlite3.dll` | `73530e8f4555605d716352ee98fe0ce205a09e5eec57e7e6360d4c915efcacd8` |
-| `dist/DataSifter 2.0/_internal/ucrtbase.dll` | `45972b6f719d3bb20b667f184a3bb3cf5540e42c081e1392ac501fb4046e61a0` |
+| `dist/DataSifter 2.0/_internal/ucrtbase.dll` | `bfed22e75c591a195be93ce2345ccaca4c6647e76e45df1f58d3439e00611f9c` |
 | `dist/DataSifter 2.0/_internal/unicodedata.pyd` | `ba69f643918cc520331c6a13d489d642131be23dd649d05e0cd1068fae92e76d` |
 | `dist/DataSifter 2.0/_internal/VCRUNTIME140.dll` | `d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7` |
 | `dist/DataSifter 2.0/_internal/VCRUNTIME140_1.dll` | `a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e` |
-| `dist/DataSifter 2.0/DataSifter 2.0.exe` | `a3cc29ada69ddee7fce6355963faed78c781ab92395df7b772f7463a48e0eccb` |
+| `dist/DataSifter 2.0/DataSifter 2.0.exe` | `915c40f58a1ccffeecfe3c12d164e0dc093c5f544dbeee72fb45201aa3eda9ae` |
 
 ## External inputs and services
 

@@ -134,6 +134,19 @@ class Preferences:
 class LocalConfiguration:
     profiles: list[DirectoryProfile] = field(default_factory=list)
     preferences: Preferences = field(default_factory=Preferences)
+    last_connected_profile_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.last_connected_profile_id is None:
+            return
+        if not isinstance(self.last_connected_profile_id, str):
+            raise TypeError("Last connected profile ID must be a string or None.")
+        try:
+            parsed_profile_id = uuid.UUID(self.last_connected_profile_id)
+        except (AttributeError, TypeError, ValueError) as error:
+            raise ValueError("Last connected profile ID must be a UUID.") from error
+        if str(parsed_profile_id) != self.last_connected_profile_id.casefold():
+            raise ValueError("Last connected profile ID must use canonical UUID format.")
 
 
 class ConfigurationStore:
@@ -157,15 +170,17 @@ class ConfigurationStore:
                 raise TypeError("preferences must be a JSON object")
             profiles = [DirectoryProfile.from_dict(item) for item in raw_profiles]
             preferences = Preferences(**raw_preferences)
+            last_connected_profile_id = raw.get("last_connected_profile_id")
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
             raise ConfigurationError(f"Unable to load profiles from {self.path}: {error}") from error
-        return LocalConfiguration(profiles, preferences)
+        return LocalConfiguration(profiles, preferences, last_connected_profile_id)
 
     def save(self, configuration: LocalConfiguration) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         document = {
             "profiles": [asdict(profile) for profile in configuration.profiles],
             "preferences": asdict(configuration.preferences),
+            "last_connected_profile_id": configuration.last_connected_profile_id,
         }
         temporary_path: Path | None = None
         try:

@@ -30,7 +30,10 @@ analysis = Analysis(
     ["src/datasifter/__main__.py"],
     pathex=["src"],
     binaries=binaries,
-    datas=[],
+    datas=[
+        (str(project_root / "LICENSE"), "."),
+        (str(project_root / "PRIVACY.md"), "."),
+    ],
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},

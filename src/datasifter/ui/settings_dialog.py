@@ -34,11 +34,14 @@ class SettingsDialog(QDialog):
 
         lens = QWidget()
         lens_layout = QVBoxLayout(lens)
-        self.ai_enabled = QCheckBox("Enable Directory Lens (local AI)")
+        self.ai_enabled = QCheckBox("Enable Data Lens (local AI)")
         self.ai_enabled.setChecked(preferences.ai_enabled)
         lens_layout.addWidget(self.ai_enabled)
         explanation = QLabel(
-            "Directory Lens translates descriptions into LDAP filters locally. "
+            "Data Lens translates descriptions into validated search, mutation proposal, "
+            "or clarification intents locally. Searches follow the review preference; mutation requests "
+            "require an explicit preview and confirmation before they can be applied. "
+            "Target session commands are handled locally. "
             "Only GGUF model files through llama.cpp are supported. "
             "Disabling it hides the workspace panel and releases the loaded model. "
             "Your approved model file is retained."
@@ -61,17 +64,17 @@ class SettingsDialog(QDialog):
         lens_layout.addLayout(model_buttons)
         notice = QLabel(
             "Model selection and source approval are saved separately when confirmed, "
-            "even if you cancel this settings screen. Enable and save Directory Lens "
+            "even if you cancel this settings screen. Enable and save Data Lens "
             "before loading a model."
         )
         notice.setWordWrap(True)
         lens_layout.addWidget(notice)
         lens_layout.addStretch()
-        self.tabs.addTab(lens, "Directory Lens")
+        self.tabs.addTab(lens, "Data Lens")
 
         safety = QWidget()
         safety_layout = QVBoxLayout(safety)
-        self.ai_confirmation = QCheckBox("Review Directory Lens filters before execution")
+        self.ai_confirmation = QCheckBox("Review Data Lens filters before execution")
         self.ai_confirmation.setChecked(preferences.require_ai_confirmation)
         self.delete_confirmation = QCheckBox("Confirm before deleting entries")
         self.delete_confirmation.setChecked(preferences.require_delete_confirmation)
@@ -82,7 +85,7 @@ class SettingsDialog(QDialog):
         ):
             safety_layout.addWidget(checkbox)
         safety_notice = QLabel(
-            "Directory Lens session confirmation overrides remain available in the Settings "
+            "Data Lens session confirmation overrides remain available in the Settings "
             "menu. Filter validation and model integrity checks always remain active."
         )
         safety_notice.setWordWrap(True)

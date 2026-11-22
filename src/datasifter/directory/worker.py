@@ -9,11 +9,13 @@ from typing import Any
 from PyQt6.QtCore import QObject, QRunnable, pyqtSignal
 
 from datasifter.diagnostics import log_exception
+from datasifter.remediation import translate_error
 
 
 class WorkerSignals(QObject):
     succeeded = pyqtSignal(object)
     failed = pyqtSignal(str)
+    diagnostic = pyqtSignal(object)
     progress = pyqtSignal(int, str)
     finished = pyqtSignal()
 
@@ -42,11 +44,13 @@ class DirectoryWorker(QRunnable):
             else:
                 self.signals.failed.emit(
                     "Cancellation was requested after the operation returned. "
-                    "A submitted directory change may already have completed; verify "
-                    "the directory before retrying."
+                    "A submitted operation may already have completed; verify its "
+                    "outcome before retrying."
                 )
         except Exception as error:  # noqa: BLE001
             log_exception(error)
-            self.signals.failed.emit(str(error))
+            diagnostic = translate_error(error)
+            self.signals.diagnostic.emit(diagnostic)
+            self.signals.failed.emit(diagnostic.as_text())
         finally:
             self.signals.finished.emit()

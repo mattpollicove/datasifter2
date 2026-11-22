@@ -1,9 +1,11 @@
 import socket
+from pathlib import Path
 
 import pytest
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QInputDialog,
     QLineEdit,
@@ -14,13 +16,23 @@ from PyQt6.QtWidgets import (
 
 from datasifter import __version__
 from datasifter.build_info import build_label
-from datasifter.config import ConfigurationStore, DirectoryProfile, LocalConfiguration, Preferences
+from datasifter.config import (
+    ConfigurationError,
+    ConfigurationStore,
+    DirectoryProfile,
+    LocalConfiguration,
+    Preferences,
+)
+from datasifter.ui import about_dialog as about_dialog_module
+from datasifter.ui import main_window as main_window_module
+from datasifter.ui.about_dialog import GITHUB_ISSUES_URL, AboutDialog
 from datasifter.ui.main_window import (
     AttributeValueDelegate,
     CommandReviewDialog,
     LDAPFilterHighlighter,
     MainWindow,
     ProfileDialog,
+    ProfileWizard,
 )
 
 
@@ -35,20 +47,150 @@ def test_ui_displays_current_build_version(qtbot, tmp_path):
     window.close()
 
 
+def test_help_menu_opens_about_dialog(qtbot, tmp_path, monkeypatch):
+    opened = []
+
+    class FakeAboutDialog:
+        def __init__(self, parent):
+            self.parent = parent
+
+        def exec(self):
+            opened.append(self)
+
+    monkeypatch.setattr(main_window_module, "AboutDialog", FakeAboutDialog)
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+
+    help_menu = next(
+        action.menu() for action in window.menuBar().actions() if action.text() == "Help"
+    )
+    about_action = next(
+        action for action in help_menu.actions() if action.text() == "About DataSifter..."
+    )
+    about_action.trigger()
+
+    assert len(opened) == 1
+    assert opened[0].parent is window
+    window.close()
+
+
+def test_data_lens_help_menu_opens_copyable_catalog(qtbot, tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        main_window_module.CopyableTextDialog,
+        "exec",
+        lambda dialog: seen.append((dialog.windowTitle(), dialog.text.toPlainText())),
+    )
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    help_menu = next(action.menu() for action in window.menuBar().actions() if action.text() == "Help")
+    next(action for action in help_menu.actions() if action.text() == "Data Lens help...").trigger()
+    assert seen[0][0] == "Data Lens help"
+    assert "Attribute aliases" in seen[0][1]
+    assert "explicit confirmation" in seen[0][1]
+    window.close()
+
+
+def test_error_dialog_uses_copyable_text(qtbot, tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        main_window_module.CopyableTextDialog,
+        "exec",
+        lambda dialog: seen.append(dialog.text.toPlainText()),
+    )
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    window._show_error("Authentication failed.\n\nWhat to do:\n- Check the bind identity.")
+    assert "Check the bind identity." in seen[0]
+    window.close()
+
+
+def test_worker_failure_reaches_ui_with_remediation(qtbot, tmp_path, monkeypatch):
+    from datasifter.directory.service import LDAPResultError
+
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    messages = []
+    monkeypatch.setattr(window, "_show_error", messages.append)
+
+    def fail(_cancelled, _progress):
+        raise LDAPResultError("invalidCredentials", 49)
+
+    window._run_worker(fail, lambda _result: pytest.fail("operation must fail"))
+    qtbot.waitUntil(lambda: not window._workers)
+    assert "authentication failed" in messages[0]
+    assert "bind identity" in messages[0]
+    window.close()
+
+
+def test_blocked_mutation_preview_shows_remediation(qtbot, tmp_path, standard):
+    from datalens_support import ADA
+
+    from datasifter.datalens import DeletePlan, PreparedMutation
+
+    adapter = standard.adapter(profile_read_only=True)
+    plan = DeletePlan(dn=ADA)
+    prepared = PreparedMutation(plan=plan, preview=adapter.execute(plan).preview)
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    window._display_intent_result(adapter._service.profile, prepared)
+    assert "What to do:" in window.ai_output.toPlainText()
+    assert "writable profile" in window.ai_output.toPlainText()
+    window.close()
+
+
+def test_about_dialog_shows_privacy_license_and_github_support(qtbot):
+    dialog = AboutDialog()
+    qtbot.addWidget(dialog)
+
+    assert dialog.tabs.tabText(1) == "Privacy"
+    assert "not the request, prompt, or raw model response" in dialog.privacy_text.toPlainText()
+    assert dialog.tabs.tabText(2) == "MIT License"
+    assert dialog.license_text.toPlainText() == (
+        Path(__file__).resolve().parents[1] / "LICENSE"
+    ).read_text(encoding="utf-8")
+    assert GITHUB_ISSUES_URL in dialog.support_link.text()
+    assert dialog.support_link.openExternalLinks()
+    dialog.close()
+
+
+def test_about_dialog_reads_documents_from_standalone_bundle(qtbot, tmp_path, monkeypatch):
+    project_root = Path(__file__).resolve().parents[1]
+    for name in ("LICENSE", "PRIVACY.md"):
+        (tmp_path / name).write_text(
+            (project_root / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+    monkeypatch.setattr(about_dialog_module.sys, "_MEIPASS", str(tmp_path), raising=False)
+
+    dialog = AboutDialog()
+    qtbot.addWidget(dialog)
+
+    assert dialog.tabs.tabText(2) == "MIT License"
+    assert dialog.license_text.toPlainText() == (tmp_path / "LICENSE").read_text(
+        encoding="utf-8"
+    )
+    dialog.close()
+
+
 def test_startup_and_disconnected_lens_do_not_contact_ldap(qtbot, tmp_path, monkeypatch):
     from datasifter import __main__
     from datasifter.directory.service import LDAPService
+    from datasifter.ui.data_lens_tab import CommandClarificationDialog
 
     assert __main__.MainWindow is MainWindow
     monkeypatch.setattr(
         LDAPService, "search", lambda *_args, **_kwargs: pytest.fail("Unexpected LDAP search")
     )
+    # The command below is incomplete, which opens a modal dialog; dismiss it.
+    monkeypatch.setattr(
+        CommandClarificationDialog, "exec", lambda _dialog: QDialog.DialogCode.Rejected
+    )
     window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
     qtbot.addWidget(window)
     assert window.tabs.tabText(0) == "Directory Workbench"
-    assert window.tabs.indexOf(window.directory_lens_tab) == -1
+    assert window.tabs.indexOf(window.data_lens_tab) == -1
     window.show()
-    tab = window.directory_lens_tab
+    tab = window.data_lens_tab
     assert [
         tab.create_btn.text(),
         tab.update_btn.text(),
@@ -74,15 +216,150 @@ def test_startup_and_disconnected_lens_do_not_contact_ldap(qtbot, tmp_path, monk
     window.close()
 
 
+def test_ldif_actions_follow_connection_write_access_and_selection(qtbot, tmp_path):
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+
+    assert not window.import_ldif_action.isEnabled()
+    assert not window.export_ldif_action.isEnabled()
+
+    profile = DirectoryProfile(name="Writable", host="ldap.test", base_dn="dc=test")
+    window._active_profile = profile
+    window._refresh_connection_controls()
+    assert window.import_ldif_action.isEnabled()
+    assert not window.export_ldif_action.isEnabled()
+
+    window._selected_dn = "cn=Alice,dc=test"
+    window._refresh_connection_controls()
+    assert window.export_ldif_action.isEnabled()
+
+    profile.read_only = True
+    window._refresh_connection_controls()
+    assert not window.import_ldif_action.isEnabled()
+    assert window.export_ldif_action.isEnabled()
+    window.close()
+
+
+@pytest.mark.parametrize("import_fails", [False, True])
+def test_ldif_refresh_reconnects_import_profile_not_selected_profile(
+    qtbot, tmp_path, monkeypatch, import_fails
+):
+    from threading import Event
+
+    from datasifter.directory.ldif import LDIFRecord
+    from datasifter.directory.service import LDAPImportError
+
+    active = DirectoryProfile(name="Active", host="active.test", base_dn="dc=test")
+    selected = DirectoryProfile(name="Selected", host="selected.test", base_dn="dc=test")
+    store = ConfigurationStore(tmp_path / "profiles.json")
+    store.save(LocalConfiguration(profiles=[active, selected]))
+    window = MainWindow(store=store)
+    qtbot.addWidget(window)
+    active = window.configuration.profiles[0]
+    window._active_profile = active
+    window.profiles.setCurrentIndex(1)
+    records = [LDIFRecord(dn="cn=Alice,dc=test", change_type="delete")]
+    imports = []
+    reconnects = []
+    errors = []
+
+    class FakeService:
+        def apply_ldif_records(self, received, cancelled=None, progress=None):
+            imports.append(received)
+            if import_fails:
+                raise LDAPImportError("Earlier changes may have been applied.")
+            return len(received)
+
+    def service(profile, _password):
+        assert profile.profile_id == active.profile_id
+        return FakeService()
+
+    def run_now(operation, success, failure=None, on_progress=None, on_finished=None):
+        if on_finished is None:
+            reconnects.append(window._active_profile)
+            return
+        try:
+            result = operation(Event(), lambda *_args: None)
+        except LDAPImportError as error:
+            failure(str(error))
+        else:
+            success(result)
+        on_finished()
+
+    monkeypatch.setattr(QMessageBox, "exec", lambda _dialog: QMessageBox.StandardButton.Apply)
+    monkeypatch.setattr(
+        QMessageBox, "critical", lambda _parent, _title, text: errors.append(text)
+    )
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: None)
+    monkeypatch.setattr(window, "_service", service)
+    monkeypatch.setattr(window, "_run_worker", run_now)
+
+    window._confirm_ldif_import(active, None, records)
+
+    assert imports == [records]
+    assert reconnects == [active]
+    assert window._selected_profile().profile_id == selected.profile_id
+    assert bool(errors) == import_fails
+    window.close()
+
+
+def test_export_selected_entry_writes_validated_ldif(qtbot, tmp_path, monkeypatch):
+    from threading import Event
+
+    from datasifter.directory.ldif import read_ldif
+
+    profile = DirectoryProfile(name="Writable", host="ldap.test", base_dn="dc=test")
+    distinguished_name = "cn=Alice,dc=test"
+    target = tmp_path / "selected-entry.ldif"
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    window._active_profile = profile
+    window._selected_dn = distinguished_name
+    window._refresh_connection_controls()
+
+    class FakeService:
+        def read_entry(self, dn, cancelled=None):
+            assert dn == distinguished_name
+            assert cancelled is not None
+            return {
+                "dn": dn,
+                "attributes": {"objectClass": ["top"], "cn": ["Alice"]},
+            }
+
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: "secret")
+    monkeypatch.setattr(window, "_service", lambda *_args: FakeService())
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda *_args: QMessageBox.StandardButton.Yes,
+    )
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        lambda *_args: (str(target), "LDIF files (*.ldif)"),
+    )
+
+    def run_now(operation, success, _failure=None, **_kwargs):
+        success(operation(Event(), lambda *_args: None))
+
+    monkeypatch.setattr(window, "_run_worker", run_now)
+    window._export_selected_ldif()
+
+    records = read_ldif(target)
+    assert len(records) == 1
+    assert records[0].dn == distinguished_name
+    assert records[0].attributes == {"objectClass": ["top"], "cn": ["Alice"]}
+    window.close()
+
+
 def test_connection_prepares_lens_with_real_profile_and_credentials(qtbot, tmp_path, monkeypatch):
     from datasifter.directory.service import LDAPService
 
     window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
     qtbot.addWidget(window)
-    assert window.tabs.indexOf(window.directory_lens_tab) == -1
+    assert window.tabs.indexOf(window.data_lens_tab) == -1
     assert not window.filter_edit.isEnabled()
     assert not window.filter_execute.isEnabled()
-    assert not window.ai_panel.isEnabled()
     assert not window.schema_refresh_button.isEnabled()
     profile = DirectoryProfile(name="Connected", host="ldap.test", base_dn="dc=test")
     window.configuration.profiles.append(profile)
@@ -97,9 +374,9 @@ def test_connection_prepares_lens_with_real_profile_and_credentials(qtbot, tmp_p
 
     monkeypatch.setattr(window, "_service", make_service)
     window._connection_result({"profile_id": profile.profile_id, "entries": []})
-    assert window.directory_lens_tab._service is service
-    assert window.directory_lens_tab._lens is None
-    assert window.directory_lens_tab.create_btn.isEnabled()
+    assert window.data_lens_tab._service is service
+    assert window.data_lens_tab._lens is None
+    assert window.data_lens_tab.create_btn.isEnabled()
     assert window.filter_edit.isEnabled()
     assert window.filter_execute.isEnabled()
     assert window.ai_panel.isEnabled()
@@ -123,7 +400,7 @@ def test_disconnect_clears_session_and_ignores_late_connection_result(
         lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
     )
     window._active_profile = profile
-    window.directory_lens_tab.set_service(LDAPService(profile, None))
+    window.data_lens_tab.set_service(LDAPService(profile, None))
     window._show_directory([{"dn": "cn=Matt,dc=test", "attributes": {"cn": ["Matt"]}}])
     workers = []
     callbacks = []
@@ -145,7 +422,7 @@ def test_disconnect_clears_session_and_ignores_late_connection_result(
     assert callbacks == []
     assert window._active_profile is None
     assert window.disconnect_button.isEnabled() is False
-    assert window.directory_lens_tab._service is None
+    assert window.data_lens_tab._service is None
     assert window.tree.topLevelItemCount() == 0
     assert window.attributes.rowCount() == 0
     assert window.configuration.profiles == [profile]
@@ -153,12 +430,12 @@ def test_disconnect_clears_session_and_ignores_late_connection_result(
     window.close()
 
 
-def test_directory_lens_initializes_on_show_and_resets_service(qtbot, monkeypatch):
+def test_data_lens_initializes_on_show_and_resets_service(qtbot, monkeypatch):
     from PyQt6.QtCore import pyqtSignal
     from PyQt6.QtWidgets import QTreeView, QWidget
 
     from datasifter.directory.service import LDAPService
-    from datasifter.ui import directory_lens_tab
+    from datasifter.ui import data_lens_tab
 
     created = []
 
@@ -171,10 +448,10 @@ def test_directory_lens_initializes_on_show_and_resets_service(qtbot, monkeypatc
             self.view = QTreeView(self)
             created.append((service, root_dn))
 
-    monkeypatch.setattr(directory_lens_tab, "DirectoryLens", FakeLens)
+    monkeypatch.setattr(data_lens_tab, "DataLens", FakeLens)
     profile = DirectoryProfile(name="Read-only", host="ldap.test", base_dn="dc=test", read_only=True)
     service = LDAPService(profile, None)
-    tab = directory_lens_tab.DirectoryLensTab(service)
+    tab = data_lens_tab.DataLensTab(service)
     qtbot.addWidget(tab)
     assert created == []
     assert not tab.create_btn.isEnabled()
@@ -250,36 +527,329 @@ def test_lens_requires_approved_model_and_rejects_disabled_ai(qtbot, tmp_path, m
     window.close()
 
 
-def test_create_user_request_routes_to_directory_lens_crud(qtbot, tmp_path, monkeypatch):
-    from datasifter.directory.service import LDAPService
+def test_command_rewrite_requires_approved_model(qtbot, tmp_path):
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    failures = []
+    window._rewrite_directory_command("create", "create user example", lambda _: None, failures.append)
+    assert "approve" in failures[0]
+    assert not window._workers
+    window.close()
+
+
+def test_main_request_uses_structured_intent_without_logging_request(
+    qtbot, tmp_path, monkeypatch
+):
+    from datasifter.datalens import ClarifyIntent, DirectoryBackend
 
     window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
     qtbot.addWidget(window)
-    profile = DirectoryProfile(name="test", host="ldap.test")
-    window._active_profile = profile
-    window.directory_lens_tab.set_service(LDAPService(profile, None))
+    window._active_profile = DirectoryProfile(name="test", host="ldap.test")
     request = "create user Matt Pollicove in the people OU, cn is mattp, password is example"
-    window.ai_request.setPlainText(request)
-    submitted = []
+    prefs = window.configuration.preferences
+    prefs.model_path = str(tmp_path / "approved.gguf")
+    prefs.model_sha256 = "a" * 64
+    prefs.model_provenance = "Test catalog"
+    generated = []
+
+    class FakeGenerator:
+        def generate_intent(self, text, classes, attributes, cancelled=None):
+            generated.append((text, classes, attributes))
+            return ClarifyIntent(
+                intent="clarify",
+                question="Use the explicit entry form to handle credentials.",
+            )
+
+    class FakeService:
+        def schema_options(self, _cancelled):
+            return {"object_classes": {}, "attributes": ["cn"]}
+
+    window._loaded_model = (prefs.model_path, prefs.model_sha256, FakeGenerator())
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: None)
+    monkeypatch.setattr(window, "_service", lambda *_args: FakeService())
     monkeypatch.setattr(
-        window.directory_lens_tab,
+        main_window_module, "detect_backend", lambda *_args: DirectoryBackend.STANDARD_LDAP
+    )
+    monkeypatch.setattr(main_window_module, "create_adapter", lambda *_args: object())
+    monkeypatch.setattr(
+        window.data_lens_tab,
         "_parse_and_execute",
-        lambda text: submitted.append(text),
+        lambda _text: pytest.fail("The main request field must not execute CRUD commands"),
+    )
+    window.ai_request.setPlainText(request)
+    window._generate_filter()
+    qtbot.waitUntil(lambda: not window._workers)
+
+    assert generated[0][0] == request
+    assert "Clarification needed" in window.ai_output.toPlainText()
+    assert "password is example" not in window.ai_prompt_log.toPlainText()
+    assert "raw model output are not retained" in window.ai_prompt_log.toPlainText()
+    window.close()
+
+
+def test_mutation_intent_displays_dry_run_without_applying(
+    qtbot, tmp_path, monkeypatch, make_directory
+):
+    from datalens_support import ADA, BIND_PASSWORD
+
+    from datasifter.datalens import (
+        DeleteProposal,
+        DirectoryBackend,
+        ProposedMutationIntent,
+    )
+
+    directory = make_directory(DirectoryBackend.STANDARD_LDAP)
+    adapter = directory.adapter()
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    window._active_profile = adapter._service.profile
+    prefs = window.configuration.preferences
+    prefs.model_path = str(tmp_path / "approved.gguf")
+    prefs.model_sha256 = "a" * 64
+    prefs.model_provenance = "Test catalog"
+
+    class FakeGenerator:
+        def generate_intent(self, *_args, **_kwargs):
+            return ProposedMutationIntent(
+                intent="proposed_mutation",
+                mutation=DeleteProposal(operation="delete", target=ADA, kind="user"),
+            )
+
+    window._loaded_model = (prefs.model_path, prefs.model_sha256, FakeGenerator())
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: BIND_PASSWORD)
+    monkeypatch.setattr(window, "_service", lambda *_args: adapter._service)
+    monkeypatch.setattr(
+        main_window_module, "detect_backend", lambda *_args: DirectoryBackend.STANDARD_LDAP
+    )
+    monkeypatch.setattr(main_window_module, "create_adapter", lambda *_args: adapter)
+    monkeypatch.setattr(
+        main_window_module.MutationReviewDialog,
+        "exec",
+        lambda _dialog: QDialog.DialogCode.Rejected,
+    )
+    window.ai_request.setPlainText("delete Ada")
+    window._generate_filter()
+    qtbot.waitUntil(lambda: not window._workers)
+
+    assert "no change was applied" in window.ai_output.toPlainText()
+    assert directory.read(ADA) is not None
+    audit = (tmp_path / "logs" / "datalens-audit.jsonl").read_text(encoding="utf-8")
+    assert '"outcome":"declined"' in audit
+    assert ADA not in audit
+    window.close()
+
+
+def test_mutation_intent_applies_only_after_confirmation(qtbot, tmp_path, monkeypatch, standard):
+    from datalens_support import ADA, BIND_PASSWORD
+
+    from datasifter.datalens import DeletePlan, DirectoryBackend, PreparedMutation
+
+    adapter = standard.adapter()
+    plan = DeletePlan(dn=ADA)
+    prepared = PreparedMutation(plan=plan, preview=adapter.execute(plan).preview)
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    profile = adapter._service.profile
+    window._active_profile = profile
+    window.configuration.preferences.require_ai_confirmation = False
+    monkeypatch.setattr(
+        main_window_module.MutationReviewDialog, "exec", lambda _dialog: QDialog.DialogCode.Accepted
+    )
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: BIND_PASSWORD)
+    monkeypatch.setattr(window, "_service", lambda *_args: adapter._service)
+    monkeypatch.setattr(
+        main_window_module, "detect_backend", lambda *_args: DirectoryBackend.STANDARD_LDAP
+    )
+    monkeypatch.setattr(main_window_module, "create_adapter", lambda *_args: adapter)
+
+    window._display_intent_result(profile, prepared)
+    qtbot.waitUntil(lambda: not window._workers)
+    assert standard.read(ADA) is None
+    assert "Change applied" in window.ai_output.toPlainText()
+    window.close()
+
+
+def test_search_review_preserves_resolved_search_scope(qtbot, tmp_path, monkeypatch):
+    from datasifter.datalens import PreparedSearch, SearchScope, SearchSpec
+
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    profile = DirectoryProfile(name="test", host="ldap.test", base_dn="dc=test")
+    spec = SearchSpec(
+        base_dn="ou=People,dc=test",
+        scope=SearchScope.LEVEL,
+        filter="(cn=Ada)",
+        attributes=("cn", "mail"),
+        size_limit=20,
+    )
+    reviewed = []
+    monkeypatch.setattr(
+        CommandReviewDialog,
+        "exec",
+        lambda _dialog: QDialog.DialogCode.Accepted,
     )
     monkeypatch.setattr(
-        window,
-        "_run_worker",
-        lambda *_args, **_kwargs: pytest.fail("Create requests must not run filter generation"),
+        window, "_run_prepared_search", lambda _profile, value: reviewed.append(value)
     )
 
-    assert window.ai_generate.isEnabled()
-    assert window.ai_generate.text() == "Create user"
-    window.ai_generate.click()
+    window._display_intent_result(profile, PreparedSearch(spec=spec))
 
-    assert window.tabs.currentWidget() is window.tabs.widget(0)
-    assert window.tabs.indexOf(window.directory_lens_tab) == -1
-    assert window.directory_lens_tab.cmd_input.text() == request
-    assert submitted == [request]
+    assert reviewed[0].base_dn == "ou=People,dc=test"
+    assert reviewed[0].scope is SearchScope.LEVEL
+    assert reviewed[0].attributes == ("cn", "mail")
+    assert reviewed[0].size_limit == 20
+    window.close()
+
+
+def test_prepared_search_executes_through_typed_adapter(
+    qtbot, tmp_path, monkeypatch, make_directory
+):
+    from datalens_support import ADA, BIND_PASSWORD
+    from PyQt6.QtCore import Qt
+
+    from datasifter.datalens import DirectoryBackend, SearchScope, SearchSpec
+
+    directory = make_directory(DirectoryBackend.STANDARD_LDAP)
+    adapter = directory.adapter()
+    profile = adapter._service.profile
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    window._active_profile = profile
+    monkeypatch.setattr(window, "_confirm_leave_entry", lambda: True)
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: BIND_PASSWORD)
+    monkeypatch.setattr(window, "_service", lambda *_args: adapter._service)
+    monkeypatch.setattr(
+        main_window_module, "detect_backend", lambda *_args: DirectoryBackend.STANDARD_LDAP
+    )
+    monkeypatch.setattr(main_window_module, "create_adapter", lambda *_args: adapter)
+    spec = SearchSpec(
+        base_dn="ou=People,dc=test",
+        scope=SearchScope.SUBTREE,
+        filter="(cn=Ada)",
+        attributes=("cn", "mail"),
+        size_limit=5,
+    )
+
+    window._run_prepared_search(profile, spec)
+    qtbot.waitUntil(lambda: not window._workers)
+
+    root = window.tree.topLevelItem(0)
+    assert root.text(0) == "ou=People,dc=test"
+    assert root.childCount() == 1
+    assert root.child(0).data(0, Qt.ItemDataRole.UserRole) == ADA
+    window.close()
+
+
+class _NoSecretsVault:
+    def get_password(self, _profile):
+        return None
+
+    def get_client_key_passphrase(self, _profile):
+        return None
+
+
+def _session_window(qtbot, tmp_path, **configuration):
+    first = DirectoryProfile(name="first", host="first.ldap.test", base_dn="dc=first")
+    second = DirectoryProfile(name="second", host="second.ldap.test", read_only=True)
+    store = ConfigurationStore(tmp_path / "profiles.json")
+    store.save(LocalConfiguration(profiles=[first, second], **configuration))
+    window = MainWindow(store=store, vault=_NoSecretsVault())
+    qtbot.addWidget(window)
+    first, second = window.configuration.profiles
+    return window, first, second
+
+
+def _run_lens_request(window, request):
+    window.ai_request.setPlainText(request)
+    assert window.ai_generate.isEnabled()
+    window.ai_generate.click()
+    return window.ai_output.toPlainText()
+
+
+def test_lens_search_needs_established_session_but_session_commands_do_not(qtbot, tmp_path):
+    window, first, _second = _session_window(qtbot, tmp_path)
+    preferences = window.configuration.preferences
+    preferences.model_path = str(tmp_path / "approved.gguf")
+    preferences.model_sha256 = "a" * 64
+    preferences.model_provenance = "Test catalog"
+
+    window.ai_request.setPlainText("surname starts with b")
+    assert not window.ai_generate.isEnabled()
+    assert window.ai_generate.toolTip() == "Connect to a directory first."
+    window._active_profile = first
+    window._connecting = True
+    window._refresh_lens_controls()
+    assert not window.ai_generate.isEnabled()
+
+    window.ai_request.setPlainText("list profiles in ou=People")
+    assert window.ai_generate.text() == "Run request"
+    window.ai_request.setPlainText("list targets")
+    assert window.ai_panel.isEnabled()
+    assert window.ai_generate.isEnabled()
+    assert window.ai_generate.text() == "Run command"
+    window.close()
+
+
+def test_session_commands_connect_and_switch_targets(qtbot, tmp_path, monkeypatch):
+    window, first, second = _session_window(qtbot, tmp_path)
+    operations = []
+    monkeypatch.setattr(
+        window, "_run_worker", lambda operation, *_args: operations.append(operation)
+    )
+
+    output = _run_lens_request(window, "connect to second")
+
+    assert output == "Connecting to second — second.ldap.test:389 (plain, anonymous)…"
+    assert window._active_profile is second
+    assert window._connecting
+    assert window._selected_profile() is second
+    assert "Session command: connect to second" in window.ai_prompt_log.toPlainText()
+
+    window._connecting = False
+    window._show_directory([{"dn": "cn=Stale,dc=second", "attributes": {}}])
+    assert _run_lens_request(window, "connect to second").startswith("Already connected to")
+
+    output = _run_lens_request(window, "Switch to profile FIRST.")
+
+    assert output == (
+        "Disconnected from second. "
+        "Connecting to first — first.ldap.test:389 (plain, anonymous)…"
+    )
+    assert window._active_profile is first
+    assert window.tree.topLevelItemCount() == 0
+    assert len(operations) == 2
+    window.close()
+
+
+def test_session_commands_report_targets_and_disconnect(qtbot, tmp_path, monkeypatch):
+    window, first, second = _session_window(qtbot, tmp_path)
+    window.configuration.last_connected_profile_id = second.profile_id
+    monkeypatch.setattr(
+        window, "_connect_profile", lambda _profile: pytest.fail("Must not connect")
+    )
+    window._active_profile = first
+
+    assert _run_lens_request(window, "list targets") == (
+        "first — first.ldap.test:389 (plain, anonymous) [connected]\n"
+        "second — second.ldap.test:389 (plain, anonymous) [last connected]"
+    )
+    assert _run_lens_request(window, "current target") == (
+        "Connected to first — first.ldap.test:389 (plain, anonymous); "
+        "base DN dc=first; writable."
+    )
+    assert "No saved profile matches 'nowhere'" in _run_lens_request(
+        window, "connect to nowhere"
+    )
+    assert "second is not the current target" in _run_lens_request(
+        window, "disconnect from second"
+    )
+    assert window._active_profile is first
+
+    assert _run_lens_request(window, "disconnect") == "Disconnected from first."
+    assert window._active_profile is None
+    assert _run_lens_request(window, "show current session") == (
+        "No target is connected. Last connected: second."
+    )
     window.close()
 
 
@@ -357,36 +927,31 @@ def test_tree_context_menu_refreshes_the_clicked_entry(qtbot, tmp_path, monkeypa
     window.close()
 
 
-def test_add_phone_request_routes_to_directory_commands_not_search(qtbot, tmp_path, monkeypatch):
-    from datasifter.directory.service import LDAPService
-
+def test_mutation_request_requires_approved_model_in_structured_flow(
+    qtbot, tmp_path, monkeypatch
+):
     window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
     qtbot.addWidget(window)
-    profile = DirectoryProfile(name="test", host="ldap.test")
-    window._active_profile = profile
-    window.directory_lens_tab.set_service(LDAPService(profile, None))
+    window._active_profile = DirectoryProfile(name="test", host="ldap.test")
     request = "add phone number to mattp 732 555 1212"
     window.ai_request.setPlainText(request)
-    submitted = []
+    messages = []
+    monkeypatch.setattr(QMessageBox, "information", lambda *_args: messages.append(_args[2]))
     monkeypatch.setattr(
-        window.directory_lens_tab,
+        window.data_lens_tab,
         "_parse_and_execute",
-        lambda text: submitted.append(text),
+        lambda _text: pytest.fail("The main request field must not route to legacy CRUD"),
     )
     monkeypatch.setattr(
         window,
         "_run_worker",
-        lambda *_args, **_kwargs: pytest.fail("CRUD requests must not run filter generation"),
+        lambda *_args, **_kwargs: pytest.fail("An unapproved model must not run"),
     )
 
-    assert window.ai_generate.isEnabled()
-    assert window.ai_generate.text() == "Run command"
-    window.ai_generate.click()
-
-    assert window.tabs.currentWidget() is window.tabs.widget(0)
-    assert window.tabs.indexOf(window.directory_lens_tab) == -1
-    assert window.directory_lens_tab.cmd_input.text() == request
-    assert submitted == [request]
+    assert not window.ai_generate.isEnabled()
+    assert window.ai_generate.text() == "Run request"
+    window._generate_filter()
+    assert "Select and approve a local GGUF" in messages[0]
     window.close()
 
 
@@ -400,7 +965,7 @@ def test_settings_save_hide_reenable_and_persist_lens(qtbot, tmp_path):
     dialog = SettingsDialog(window.configuration.preferences, window)
     qtbot.addWidget(dialog)
     assert [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())] == [
-        "Directory Lens", "Safety", "Appearance"
+        "Data Lens", "Safety", "Appearance"
     ]
     dialog.ai_enabled.setChecked(False)
     dialog.delete_confirmation.setChecked(False)
@@ -415,7 +980,7 @@ def test_settings_save_hide_reenable_and_persist_lens(qtbot, tmp_path):
     assert not window.directory_confirmation_actions["rename"].isChecked()
     assert not window.highlight_search_action.isChecked()
     assert not window._requires_ai_confirmation()
-    assert "Directory Lens disabled" in window.ai_prompt_log.toPlainText()
+    assert "Data Lens disabled" in window.ai_prompt_log.toPlainText()
     reopened = MainWindow(store=store)
     qtbot.addWidget(reopened)
     assert reopened.ai_panel.isHidden()
@@ -489,6 +1054,56 @@ def test_filter_input_uses_syntax_highlighting(qtbot, tmp_path):
     window.close()
 
 
+def test_clear_filter_resets_and_searches_all_entries(qtbot, tmp_path, monkeypatch):
+    from threading import Event
+
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    assert not window.filter_clear.isEnabled()
+    profile = DirectoryProfile(name="test", host="ldap.test", base_dn="dc=test")
+    window._active_profile = profile
+    window._refresh_connection_controls()
+    window.filter_edit.setPlainText("(cn=Alice)")
+    calls = []
+
+    class FakeService:
+        def search(self, base, expression, **_kwargs):
+            calls.append((base, expression))
+            return [{"dn": "cn=Bob,dc=test", "attributes": {"cn": ["Bob"]}}]
+
+    monkeypatch.setattr(window, "_profile_password", lambda _profile: None)
+    monkeypatch.setattr(window, "_service", lambda *_args: FakeService())
+    monkeypatch.setattr(
+        window, "_run_worker",
+        lambda operation, success: success(operation(Event(), lambda *_args: None)),
+    )
+    window.filter_clear.click()
+
+    assert window.filter_edit.toPlainText() == "(objectClass=*)"
+    assert calls == [("dc=test", "(objectClass=*)")]
+    assert window.tree.topLevelItem(0).child(0).text(0) == "cn=Bob,dc=test"
+    assert not window._search_attributes
+    window.close()
+
+
+def test_clear_filter_cancel_preserves_filter_and_view(qtbot, tmp_path, monkeypatch):
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    window._active_profile = DirectoryProfile(name="test", host="ldap.test", base_dn="dc=test")
+    window._refresh_connection_controls()
+    window._show_directory([{"dn": "cn=Alice,dc=test", "attributes": {}}])
+    window.filter_edit.setPlainText("(cn=Alice)")
+    monkeypatch.setattr(window, "_confirm_leave_entry", lambda: False)
+    monkeypatch.setattr(window, "_run_worker", lambda *_args: pytest.fail("Must not search"))
+
+    window.filter_clear.click()
+
+    assert window.filter_edit.toPlainText() == "(cn=Alice)"
+    assert window.tree.topLevelItem(0).child(0).text(0) == "cn=Alice,dc=test"
+    monkeypatch.setattr(window, "_confirm_leave_entry", lambda: True)
+    window.close()
+
+
 def test_list_profiles_button_is_disabled_until_profiles_exist(qtbot, tmp_path, monkeypatch):
     profile = DirectoryProfile(
         name="Production LDAP",
@@ -500,6 +1115,7 @@ def test_list_profiles_button_is_disabled_until_profiles_exist(qtbot, tmp_path, 
     window = MainWindow(store=store)
     qtbot.addWidget(window)
     assert not window.list_profiles_button.isEnabled()
+    assert not window.delete_profile_button.isEnabled()
 
     messages = []
     monkeypatch.setattr(
@@ -510,6 +1126,7 @@ def test_list_profiles_button_is_disabled_until_profiles_exist(qtbot, tmp_path, 
     window.configuration.profiles.append(profile)
     window._refresh_profiles()
     assert window.list_profiles_button.isEnabled()
+    assert window.delete_profile_button.isEnabled()
     window.list_profiles_button.click()
 
     assert messages == [
@@ -521,6 +1138,7 @@ def test_list_profiles_button_is_disabled_until_profiles_exist(qtbot, tmp_path, 
     window.configuration.profiles.clear()
     window._refresh_profiles()
     assert not window.list_profiles_button.isEnabled()
+    assert not window.delete_profile_button.isEnabled()
     window.close()
 
 
@@ -931,6 +1549,13 @@ def _approve_model(window, qtbot, monkeypatch, path, load_after):
 
 def test_approved_model_loads_after_download_and_is_reused(qtbot, tmp_path, monkeypatch):
     from datasifter.ai.local_model import model_sha256
+    from datasifter.datalens import (
+        DirectoryBackend,
+        PreparedSearch,
+        SearchCondition,
+        SearchIntent,
+        SearchSpec,
+    )
 
     model_path = tmp_path / "model.gguf"
     model_path.write_bytes(b"GGUFapproved")
@@ -942,13 +1567,12 @@ def test_approved_model_loads_after_download_and_is_reused(qtbot, tmp_path, monk
             assert sha256 == model_sha256(path)
             created.append(path)
 
-        def generate_filter(
-            self, request, classes, attributes, on_token=None, cancelled=None, on_prompt=None
-        ):
+        def generate_intent(self, request, classes, attributes, cancelled=None):
             received.append((classes, attributes))
-            on_prompt(f"PROMPT for {request}")
-            on_token("(cn=a)")
-            return "(cn=a)"
+            return SearchIntent(
+                intent="search",
+                conditions=(SearchCondition(term="name", value="a"),),
+            )
 
     monkeypatch.setattr("datasifter.ui.main_window.LlamaCppFilterGenerator", FakeGenerator)
     window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
@@ -968,36 +1592,52 @@ def test_approved_model_loads_after_download_and_is_reused(qtbot, tmp_path, monk
             schema_requests.append(True)
             return {"object_classes": {"inetOrgPerson": {}}, "attributes": ["telephoneNumber"]}
 
-    monkeypatch.setattr(window, "_review_generated_filter", reviewed.append)
+    monkeypatch.setattr(
+        window, "_display_intent_result", lambda _profile, prepared: reviewed.append(prepared)
+    )
     monkeypatch.setattr(window, "_profile_password", lambda _profile: "secret")
     monkeypatch.setattr(window, "_service", lambda *_args: FakeService())
+    monkeypatch.setattr(
+        main_window_module, "detect_backend", lambda *_args: DirectoryBackend.STANDARD_LDAP
+    )
+    monkeypatch.setattr(main_window_module, "create_adapter", lambda *_args: object())
+    monkeypatch.setattr(
+        main_window_module,
+        "prepare_intent",
+        lambda _intent, _resolver, **_kwargs: PreparedSearch(
+            spec=SearchSpec(filter="(cn=a)")
+        ),
+    )
     window.ai_request.setPlainText("people named a")
     for _attempt in range(2):
         window._generate_filter()
         qtbot.waitUntil(lambda: not window._workers)
-    assert reviewed == ["(cn=a)", "(cn=a)"]
+    assert len(reviewed) == 2
+    assert all(isinstance(item, PreparedSearch) for item in reviewed)
     assert created == [str(model_path)]
     assert schema_requests == [True]
     assert received[-1] == (["inetOrgPerson"], ["telephoneNumber"])
     log = window.ai_prompt_log.toPlainText()
-    assert log.count("Request: people named a") == 2
-    assert log.count("PROMPT for people named a") == 2
+    assert log.count("Structured intent: search") == 2
+    assert "Request: people named a" not in log
+    assert "PROMPT for people named a" not in log
     assert "model.gguf" in log
-    assert "Model output: (cn=a)" in log and "Filter: (cn=a)" in log
-    assert window.tabs.tabText(window.tabs.count() - 1) == "Directory Lens log"
+    assert "raw model output are not retained" in log
+    assert window.tabs.tabText(window.tabs.count() - 1) == "Data Lens log"
     window.clear_prompts_button.click()
     assert window.ai_prompt_log.toPlainText() == ""
     window.close()
 
 
-def test_failed_generation_is_logged_with_prompt(qtbot, tmp_path, monkeypatch):
+def test_failed_intent_generation_is_reported_without_logging_request(
+    qtbot, tmp_path, monkeypatch
+):
     class FakeGenerator:
         def __init__(self, *_args):
             pass
 
-        def generate_filter(self, request, *_args, on_prompt=None, **_kwargs):
-            on_prompt("PROMPT TEXT")
-            raise RuntimeError("unusable filter (state=pa)")
+        def generate_intent(self, *_args, **_kwargs):
+            raise RuntimeError("invalid structured intent")
 
     class FakeService:
         def schema_options(self, _cancelled):
@@ -1018,10 +1658,9 @@ def test_failed_generation_is_logged_with_prompt(qtbot, tmp_path, monkeypatch):
     window._generate_filter()
     qtbot.waitUntil(lambda: not window._workers)
     log = window.ai_prompt_log.toPlainText()
-    assert "Request: people in pa" in log
-    assert "PROMPT TEXT" in log
-    assert "Error:" in log and "unusable filter" in log
-    assert errors
+    assert "Request: people in pa" not in log
+    assert "raw model output are not retained" in log
+    assert errors == ["invalid structured intent"]
     window.close()
 
 
@@ -1235,6 +1874,101 @@ def test_rename_does_not_submit_after_confirmation_is_cancelled(qtbot, tmp_path,
     assert not window._workers
     window.close()
 
+
+def test_add_entry_worker_captures_values_before_dialog_disposal(qtbot, tmp_path, monkeypatch):
+    from threading import Event
+
+    from PyQt6.QtCore import QCoreApplication, QEvent
+
+    profile = DirectoryProfile(name="test", host="ldap.test", base_dn="dc=test")
+    entry_dn = "ou=temporary,dc=test"
+    entry_attributes = (
+        "objectClass=top\n"
+        "objectClass=organizationalUnit\n"
+        "ou=temporary"
+    )
+    schema = {
+        "object_classes": {
+            "top": {"kind": "abstract", "required": ["objectClass"]},
+            "organizationalUnit": {"kind": "structural", "required": ["ou"]},
+        },
+        "attributes": ["objectClass", "ou"],
+    }
+    dialogs = []
+    operations = []
+
+    def accept_entry(dialog):
+        line_edits = dialog.findChildren(QLineEdit)
+        line_edits[0].setText(entry_dn)
+        line_edits[1].setText("top, organizationalUnit")
+        text_edits = dialog.findChildren(QPlainTextEdit)
+        text_edits[-1].setPlainText(entry_attributes)
+        dialogs.append(dialog)
+        return QDialog.DialogCode.Accepted
+
+    class FakeService:
+        def __init__(self):
+            self.added = None
+
+        def add_entry(self, dn, values, _cancelled):
+            self.added = (dn, values)
+
+    service = FakeService()
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    monkeypatch.setattr(QDialog, "exec", accept_entry)
+    monkeypatch.setattr(
+        window,
+        "_run_worker",
+        lambda operation, *_args, **_kwargs: operations.append(operation),
+    )
+    monkeypatch.setattr(window, "_service", lambda *_args: service)
+
+    window._show_add_entry_dialog(profile, None, schema)
+
+    assert len(operations) == 1
+    dialogs[0].deleteLater()
+    QCoreApplication.sendPostedEvents(dialogs[0], QEvent.Type.DeferredDelete)
+    operations[0](Event(), lambda *_args: None)
+
+    assert service.added == (
+        entry_dn,
+        {"objectClass": ["top", "organizationalUnit"], "ou": ["temporary"]},
+    )
+    window.close()
+
+
+def test_add_entry_dialog_bounds_large_directory_schema(qtbot, tmp_path, monkeypatch):
+    profile = DirectoryProfile(name="test", host="ldap.test", base_dn="dc=test")
+    schema = {
+        "object_classes": {
+            f"class-{index:04d}": {
+                "kind": "structural",
+                "required": ["commonName", "surname"],
+            }
+            for index in range(1240)
+        },
+        "attributes": [f"attributeType{index:04d}" for index in range(3224)],
+    }
+    sizes = []
+
+    def reject_after_measuring(dialog):
+        size = dialog.sizeHint()
+        sizes.append((size.width(), size.height()))
+        return QDialog.DialogCode.Rejected
+
+    window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))
+    qtbot.addWidget(window)
+    monkeypatch.setattr(QDialog, "exec", reject_after_measuring)
+
+    window._show_add_entry_dialog(profile, None, schema)
+
+    assert len(sizes) == 1
+    assert sizes[0][0] < 1600
+    assert sizes[0][1] < 1000
+    window.close()
+
+
 def test_schema_inspector_loads_directory_schema_asynchronously(
     qtbot, tmp_path, monkeypatch
 ):
@@ -1410,6 +2144,106 @@ def test_profile_test_buttons_follow_their_input_fields(qtbot):
     assert dialog.plain_warning.isHidden()
 
 
+def test_add_profile_wizard_guides_save_and_preserves_fields(qtbot, tmp_path, monkeypatch):
+    profile_store = ConfigurationStore(tmp_path / "profiles.json")
+
+    class FakeVault:
+        def store_password(self, profile, password):
+            assert password == ""
+
+    window = MainWindow(store=profile_store, vault=FakeVault())
+    qtbot.addWidget(window)
+
+    def complete_wizard(dialog):
+        qtbot.addWidget(dialog)
+        dialog.show()
+        assert dialog.pages.currentIndex() == 0
+        assert not dialog.buttons.button(QDialogButtonBox.StandardButton.Save).isVisible()
+        dialog.name.setText("staging")
+        dialog.host.setText("ldap.test")
+        dialog.bind_dn.setText("cn=reader")
+        dialog.password.setText("secret")
+        dialog.transport.setCurrentIndex(dialog.transport.findData("ldaps"))
+        assert dialog.port.text() == "636"
+        dialog.next_button.click()
+        assert dialog.pages.currentIndex() == 1
+        dialog.back_button.click()
+        assert dialog.password.text() == "secret"
+        dialog.next_button.click()
+        dialog.next_button.click()
+        assert dialog.pages.currentIndex() == 2
+        dialog.base_dn.setEditText("dc=test")
+        dialog.buttons.button(QDialogButtonBox.StandardButton.Save).click()
+        return dialog.result()
+
+    monkeypatch.setattr(ProfileWizard, "exec", complete_wizard)
+    window.add_profile_button.click()
+
+    saved = profile_store.load().profiles
+    assert len(saved) == 1
+    assert (saved[0].host, saved[0].port, saved[0].transport, saved[0].base_dn) == (
+        "ldap.test", 636, "ldaps", "dc=test"
+    )
+    assert window._session_passwords[saved[0].profile_id] == "secret"
+    window.close()
+
+
+def test_wizard_authentication_discovers_base_dns_without_saving(qtbot, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "information", lambda *args: None)
+    monkeypatch.setattr(
+        "datasifter.ui.main_window.LDAPService.test_authentication",
+        lambda service, cancelled=None: "Bind succeeded.",
+    )
+    monkeypatch.setattr(
+        "datasifter.ui.main_window.LDAPService.discover_base_dns",
+        lambda service, cancelled=None: ["dc=one", "dc=two"],
+    )
+    dialog = ProfileWizard()
+    qtbot.addWidget(dialog)
+    dialog.show()
+    dialog.host.setText("ldap.test")
+    dialog.bind_dn.setText("cn=reader")
+    dialog.password.setText("secret")
+    dialog.next_button.click()
+    dialog.test_authentication_button.click()
+    assert not dialog.back_button.isEnabled()
+    assert not dialog.next_button.isEnabled()
+    qtbot.waitUntil(lambda: dialog._test_worker is None)
+    assert dialog.next_button.isEnabled()
+    dialog.next_button.click()
+    assert dialog.base_dn.count() == 2
+    assert dialog.base_dn.currentText() == "dc=one"
+    dialog.base_dn.setCurrentIndex(1)
+    dialog.reject()
+    assert dialog.profile is None
+
+
+def test_wizard_rejects_invalid_profile_and_cancel_does_not_save(qtbot, tmp_path, monkeypatch):
+    store = ConfigurationStore(tmp_path / "profiles.json")
+    window = MainWindow(store=store)
+    qtbot.addWidget(window)
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args))
+
+    def cancel_after_invalid_save(dialog):
+        qtbot.addWidget(dialog)
+        dialog.show()
+        dialog.next_button.click()
+        dialog.next_button.click()
+        dialog.base_dn.setEditText("dc=test")
+        dialog.buttons.button(QDialogButtonBox.StandardButton.Save).click()
+        assert dialog.profile is None
+        assert warnings
+        dialog.reject()
+        return dialog.result()
+
+    monkeypatch.setattr(ProfileWizard, "exec", cancel_after_invalid_save)
+    window.add_profile_button.click()
+    assert store.load().profiles == []
+    assert not store.path.exists()
+    window.close()
+
+
 def test_discovered_base_dns_preserve_manual_value_and_report_empty_list(qtbot, monkeypatch):
     monkeypatch.setattr(QMessageBox, "information", lambda *args: None)
     dialog = ProfileDialog()
@@ -1538,10 +2372,10 @@ def test_connect_prompts_for_unsaved_simple_bind_password(qtbot, tmp_path, monke
     window._connect()
 
     assert window._connecting
-    assert not window.tabs.isTabEnabled(window.tabs.indexOf(window.directory_lens_tab))
+    assert not window.tabs.isTabEnabled(window.tabs.indexOf(window.data_lens_tab))
     assert not window.filter_edit.isEnabled()
     assert not window.filter_execute.isEnabled()
-    assert not window.ai_panel.isEnabled()
+    assert not window.ai_generate.isEnabled()
 
     from threading import Event
 
@@ -1549,6 +2383,52 @@ def test_connect_prompts_for_unsaved_simple_bind_password(qtbot, tmp_path, monke
     assert seen_passwords == ["session-only-secret"]
     assert result["profile_id"] == profile.profile_id
     assert window._session_passwords[profile.profile_id] == "session-only-secret"
+    window.close()
+
+
+def test_connect_uses_last_connected_profile_when_nothing_is_selected(
+    qtbot, tmp_path, monkeypatch
+):
+    first = DirectoryProfile(name="first", host="first.ldap.test")
+    last_connected = DirectoryProfile(name="last", host="last.ldap.test")
+    store = ConfigurationStore(tmp_path / "profiles.json")
+    store.save(
+        LocalConfiguration(
+            profiles=[first, last_connected],
+            last_connected_profile_id=last_connected.profile_id,
+        )
+    )
+
+    window = MainWindow(store=store)
+    qtbot.addWidget(window)
+    assert window._selected_profile() == last_connected
+    window.profiles.setCurrentIndex(-1)
+    selected_profiles = []
+    monkeypatch.setattr(window, "_connect_profile", selected_profiles.append)
+
+    window._connect()
+
+    assert selected_profiles == [last_connected]
+    assert window._selected_profile() == last_connected
+    window.close()
+
+
+def test_successful_connection_remembers_profile(qtbot, tmp_path, monkeypatch):
+    profile = DirectoryProfile(name="test", host="ldap.test", base_dn="dc=test")
+    store = ConfigurationStore(tmp_path / "profiles.json")
+    store.save(LocalConfiguration(profiles=[profile]))
+    window = MainWindow(store=store)
+    qtbot.addWidget(window)
+    window._active_profile = profile
+    window._connecting = True
+    monkeypatch.setattr(window, "_show_directory", lambda *_args: None)
+    monkeypatch.setattr(window, "_service", lambda *_args: object())
+    monkeypatch.setattr(window.data_lens_tab, "set_service", lambda _service: None)
+
+    window._connection_result({"profile_id": profile.profile_id, "entries": []})
+
+    assert window.configuration.last_connected_profile_id == profile.profile_id
+    assert store.load().last_connected_profile_id == profile.profile_id
     window.close()
 
 
@@ -1598,6 +2478,129 @@ def test_profile_edit_saves_credentials_in_vault_not_json(qtbot, tmp_path, monke
     assert store.load().profiles[0].name == "updated"
     assert "secret" not in store.path.read_text()
     assert window._active_profile is None
+    window.close()
+
+
+def test_delete_profile_removes_saved_secrets_and_disconnects_active_profile(
+    qtbot, tmp_path, monkeypatch
+):
+    profile = DirectoryProfile(name="test", host="ldap.test")
+    store = ConfigurationStore(tmp_path / "profiles.json")
+    store.save(
+        LocalConfiguration(
+            profiles=[profile],
+            last_connected_profile_id=profile.profile_id,
+        )
+    )
+
+    class FakeVault:
+        def __init__(self):
+            self.deleted_passwords = []
+            self.deleted_passphrases = []
+
+        def delete_password(self, target):
+            self.deleted_passwords.append(target.profile_id)
+
+        def store_client_key_passphrase(self, target, passphrase):
+            assert passphrase == ""
+            self.deleted_passphrases.append(target.profile_id)
+
+    class FakeTrustStore:
+        def __init__(self):
+            self.deleted_profiles = []
+
+        def delete_tofu(self, target):
+            self.deleted_profiles.append(target.profile_id)
+
+    vault = FakeVault()
+    window = MainWindow(store=store, vault=vault)
+    qtbot.addWidget(window)
+    trust_store = FakeTrustStore()
+    window.trust_store = trust_store
+    window._active_profile = window._selected_profile()
+    window._session_passwords[profile.profile_id] = "session-secret"
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
+    )
+
+    window.delete_profile_button.click()
+
+    assert store.load().profiles == []
+    assert store.load().last_connected_profile_id is None
+    assert window.configuration.profiles == []
+    assert vault.deleted_passwords == [profile.profile_id]
+    assert vault.deleted_passphrases == [profile.profile_id]
+    assert trust_store.deleted_profiles == [profile.profile_id]
+    assert profile.profile_id not in window._session_passwords
+    assert window._active_profile is None
+    assert not window.delete_profile_button.isEnabled()
+    window.close()
+
+
+def test_delete_active_profile_stops_when_unsaved_changes_are_not_discarded(
+    qtbot, tmp_path, monkeypatch
+):
+    profile = DirectoryProfile(name="test", host="ldap.test")
+    store = ConfigurationStore(tmp_path / "profiles.json")
+    store.save(LocalConfiguration(profiles=[profile]))
+
+    class FakeVault:
+        def delete_password(self, _profile):
+            pytest.fail("profile credentials must not be deleted")
+
+        def store_client_key_passphrase(self, _profile, _passphrase):
+            pytest.fail("profile credentials must not be deleted")
+
+    window = MainWindow(store=store, vault=FakeVault())
+    qtbot.addWidget(window)
+    window._active_profile = window._selected_profile()
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
+    )
+    monkeypatch.setattr(window, "_confirm_leave_entry", lambda: False)
+
+    window.delete_profile_button.click()
+
+    assert store.load().profiles == [profile]
+    assert window._active_profile == profile
+    monkeypatch.undo()
+    window.close()
+
+
+def test_delete_profile_keeps_saved_profile_when_credential_cleanup_fails(
+    qtbot, tmp_path, monkeypatch
+):
+    profile = DirectoryProfile(name="test", host="ldap.test")
+    store = ConfigurationStore(tmp_path / "profiles.json")
+    store.save(LocalConfiguration(profiles=[profile]))
+
+    class FailingVault:
+        def delete_password(self, _profile):
+            raise ConfigurationError("keyring unavailable")
+
+    window = MainWindow(store=store, vault=FailingVault())
+    qtbot.addWidget(window)
+    messages = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
+    )
+    monkeypatch.setattr(
+        QMessageBox,
+        "critical",
+        lambda _parent, title, text: messages.append((title, text)),
+    )
+
+    window.delete_profile_button.click()
+
+    assert store.load().profiles == [profile]
+    assert window.configuration.profiles == [profile]
+    assert messages and messages[0][0] == "Profile deletion incomplete"
     window.close()
 
 
@@ -1716,7 +2719,10 @@ def test_dialog_cancel_waits_for_worker_and_does_not_show_success(qtbot, monkeyp
 
 
 @pytest.mark.parametrize("accept_trust", [True, False])
-def test_dialog_tls_trust_is_staged_until_save(qtbot, tmp_path, monkeypatch, accept_trust):
+@pytest.mark.parametrize("dialog_class", [ProfileDialog, ProfileWizard])
+def test_dialog_tls_trust_is_staged_until_save(
+    qtbot, tmp_path, monkeypatch, accept_trust, dialog_class
+):
     from test_certificates import make_certificate
 
     from datasifter.security.certificates import CertificateTrustStore
@@ -1746,7 +2752,7 @@ def test_dialog_tls_trust_is_staged_until_save(qtbot, tmp_path, monkeypatch, acc
         "datasifter.ui.main_window.LDAPService.discover_base_dns",
         lambda self, cancelled=None: ["dc=test"],
     )
-    dialog = ProfileDialog()
+    dialog = dialog_class()
     qtbot.addWidget(dialog)
     dialog.name.setText("draft")
     dialog.host.setText("draft.test")
@@ -1755,6 +2761,8 @@ def test_dialog_tls_trust_is_staged_until_save(qtbot, tmp_path, monkeypatch, acc
     dialog.authentication_mode.setCurrentIndex(1)
     dialog.bind_dn.setText("cn=draft")
     dialog.password.setText("secret")
+    if isinstance(dialog, ProfileWizard):
+        dialog.next_button.click()
     dialog.test_authentication_button.click()
     qtbot.waitUntil(lambda: dialog._test_worker is None)
     assert not bound
@@ -1767,6 +2775,8 @@ def test_dialog_tls_trust_is_staged_until_save(qtbot, tmp_path, monkeypatch, acc
     qtbot.waitUntil(lambda: dialog._test_worker is None)
     assert len(bound) == 1
     assert not bound[0].exists()
+    if isinstance(dialog, ProfileWizard):
+        dialog.next_button.click()
     dialog.accept()
     assert dialog.profile.tofu_fingerprint
     window = MainWindow(store=ConfigurationStore(tmp_path / "profiles.json"))

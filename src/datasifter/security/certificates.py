@@ -50,6 +50,16 @@ class CertificateTrustStore:
     def certificate_path(self, profile: DirectoryProfile) -> Path:
         return self.directory / f"{profile.profile_id}.pem"
 
+    def delete_tofu(self, profile: DirectoryProfile) -> None:
+        try:
+            self.certificate_path(profile).unlink()
+        except FileNotFoundError:
+            return
+        except OSError as error:
+            raise CertificateTrustError(
+                f"Unable to remove the trusted certificate for profile {profile.name}: {error}"
+            ) from error
+
     def accept_tofu(self, profile: DirectoryProfile, certificate_pem: bytes) -> CertificateDetails:
         details = certificate_details(certificate_pem)
         if profile.tofu_fingerprint:

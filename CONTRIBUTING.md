@@ -59,6 +59,36 @@ Use the tests relevant to your change; the focused command above is a parser/AI 
 If checks expose unrelated existing issues, report them separately rather than hiding
 them or expanding scope without agreement.
 
+### Live LDAP tests
+
+`tests/test_live_ldap.py` runs against a real, **non-production** directory. The tests are
+skipped unless `tests/live_ldap.local.json` exists; that file is git-ignored. To enable them:
+
+1. Copy `tests/live_ldap.example.json` to `tests/live_ldap.local.json` and set the host,
+   ports, bind DN, and base DN of a disposable test directory. The bind account must be
+   able to create and delete entries under the base DN.
+2. Supply the bind password through the `DATASIFTER_LIVE_LDAP_PASSWORD` environment variable,
+   or store it in the OS keyring under the service `DataSifter live tests` with the user name
+   `<bind DN>@<host>`. Never put the password in the JSON file or the repository.
+3. If the server certificate names the server differently from the address you connect to,
+   set `tls_server_name` to a name the certificate lists. The StartTLS and LDAPS tests then
+   use that name, resolved to the host inside the test only.
+
+Once configured, the tests are part of every `python -m pytest` run and fail, rather than
+skip, when the target is unreachable. Select them with `-m live` or leave them out with
+`-m "not live"`. They cover simple bind over plain LDAP, StartTLS and LDAPS with a pinned
+certificate, paged search, add/modify/rename/delete, and the Data Lens session commands.
+All writes stay inside an `ou=datasifter-live-<id>` entry that the tests create and remove.
+
+`tests/test_live_datalens.py` runs the Data Lens adapters against the same directory and,
+when `tests/live_ad.local.json` exists, against a **non-production** Active Directory domain.
+Copy `tests/live_ad.example.json`, and supply the password through
+`DATASIFTER_LIVE_AD_PASSWORD` or the same keyring service. The bind account must be able to
+create and delete organizational units, users and groups under the base DN. Set `ldaps_port`
+to `null` when the domain controller has no TLS certificate; the test that sets a password
+over LDAPS is then skipped and that path is covered by mock tests only. The shared target
+fixtures are in `tests/conftest.py`.
+
 Offline tests do not establish live LDAP interoperability, TLS behavior on a clean target,
 or real-model accuracy. For those changes, report the directory product/version, transport,
 OS/Python version, or model/quantization and hardware used. Use only non-production test

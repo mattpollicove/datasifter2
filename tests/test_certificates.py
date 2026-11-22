@@ -43,6 +43,18 @@ def test_accept_tofu_persists_certificate_and_pin(tmp_path):
     assert store.certificate_path(profile).read_bytes() == certificate_pem
 
 
+def test_delete_tofu_removes_certificate_and_tolerates_missing_file(tmp_path):
+    profile = DirectoryProfile(name="test", host="ldap.test")
+    store = CertificateTrustStore(tmp_path)
+    certificate_pem, _ = make_certificate("ldap.test")
+    store.accept_tofu(profile, certificate_pem)
+
+    store.delete_tofu(profile)
+    store.delete_tofu(profile)
+
+    assert not store.certificate_path(profile).exists()
+
+
 def test_tofu_rotation_is_rejected(tmp_path):
     profile = DirectoryProfile(name="test", host="ldap.test")
     original, _ = make_certificate("ldap.test")

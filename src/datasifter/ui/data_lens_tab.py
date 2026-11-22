@@ -1,15 +1,15 @@
-"""Directory Lens tab – a lightweight UI that exposes CRUD operations via :class:`DirectoryLens`.
+"""Data Lens tab – a lightweight UI that exposes CRUD operations via :class:`DataLens`.
 
 The tab contains:
 
-* A :class:`DirectoryLens` widget that displays the LDAP tree.
+* A :class:`DataLens` widget that displays the LDAP tree.
 * A set of CRUD buttons that open simple dialogs to collect the required
-  parameters and then invoke the corresponding :class:`DirectoryLens`
+  parameters and then invoke the corresponding :class:`DataLens`
   methods.
 * A log widget that shows the result of each operation.
 
 This module is intentionally minimal – it is meant to demonstrate that the
-``DirectoryLens`` component can be used programmatically.  The dialogs use
+``DataLens`` component can be used programmatically.  The dialogs use
 ``QInputDialog`` for simplicity; in a full application you would replace these
 with richer forms.
 """
@@ -17,35 +17,132 @@ with richer forms.
 from __future__ import annotations
 
 import json
+import os
 import re
-from typing import Any, Dict, List, Callable
+from collections.abc import Callable
+from typing import Any
 
+from ldap3.core.exceptions import LDAPException
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QShowEvent
 from PyQt6.QtWidgets import (
+    QDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
+    QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
-    QMessageBox,
-    QInputDialog,
-    QPlainTextEdit,
-  )
-import os
+)
 
 from datasifter.diagnostics import log_exception, logger
 from datasifter.directory.filters import (
     ATTRIBUTE_COMMAND_ALIASES,
     escape_filter_value,
-    USER_ID_ATTRIBUTES,
 )
-from datasifter.directory.service import LDAPService
-from datasifter.ui.directory_lens import DirectoryLens
+from datasifter.directory.service import LDAPOperationError, LDAPService
+from datasifter.security.certificates import CertificateTrustError
+from datasifter.ui.data_lens import DataLens
 
-class DirectoryLensTab(QWidget):
-    """A tab that hosts :class:`DirectoryLens` and CRUD controls.
+
+class CommandClarificationDialog(QDialog):
+    def __init__(
+        self,
+        verb: str,
+        example: str,
+        query: str,
+        rewrite: Callable[[str, str, Callable[[str], None], Callable[[str], None]], None]
+        | None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Command needs clarification")
+        self.resize(650, 400)
+        self._query = query
+        self._example = example
+        self._rewrite = rewrite
+        self._open = True
+        self._selected = ""
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel(f"I couldn't interpret that {verb} command."))
+        layout.addWidget(QLabel("Original query:"))
+        self.original = QPlainTextEdit(query)
+        self.original.setReadOnly(True)
+        layout.addWidget(self.original)
+        layout.addWidget(QLabel("Example:"))
+        self.example = QPlainTextEdit(example)
+        self.example.setReadOnly(True)
+        layout.addWidget(self.example)
+        layout.addWidget(QLabel("GGUF rewrite (review and edit before using):"))
+        self.draft = QLineEdit()
+        layout.addWidget(self.draft)
+        self.status = QLabel(
+            "The original query is sent to the local model if you request a rewrite. "
+            "Avoid including passwords."
+        )
+        self.status.setWordWrap(True)
+        self.status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.status)
+        buttons = QHBoxLayout()
+        self.rewrite_button = QPushButton("Rewrite with GGUF")
+        self.rewrite_button.setEnabled(rewrite is not None)
+        self.rewrite_button.clicked.connect(self._start_rewrite)
+        buttons.addWidget(self.rewrite_button)
+        use_example = QPushButton("Use example")
+        use_example.clicked.connect(self._use_example)
+        buttons.addWidget(use_example)
+        self.use_draft = QPushButton("Use rewrite")
+        self.use_draft.setEnabled(False)
+        self.draft.textChanged.connect(lambda text: self.use_draft.setEnabled(bool(text.strip())))
+        self.use_draft.clicked.connect(self._use_draft)
+        buttons.addWidget(self.use_draft)
+        cancel = QPushButton("Cancel")
+        cancel.clicked.connect(self.reject)
+        buttons.addWidget(cancel)
+        layout.addLayout(buttons)
+
+    def _start_rewrite(self) -> None:
+        if self._rewrite is None:
+            return
+        self.rewrite_button.setEnabled(False)
+        self.draft.clear()
+        self.status.setText("Rewriting with the local model...")
+
+        def succeeded(result: str) -> None:
+            if self._open:
+                self.draft.setText(result)
+                self.status.setText("Review the rewrite carefully; it has not been run.")
+                self.rewrite_button.setEnabled(True)
+
+        def failed(message: str) -> None:
+            if self._open:
+                self.status.setText(f"Rewrite failed: {message}")
+                self.rewrite_button.setEnabled(True)
+
+        self._rewrite(self._query, self._example, succeeded, failed)
+
+    def _use_example(self) -> None:
+        self._selected = self._example
+        self.accept()
+
+    def _use_draft(self) -> None:
+        self._selected = self.draft.text().strip()
+        if self._selected:
+            self.accept()
+
+    def done(self, result: int) -> None:
+        self._open = False
+        super().done(result)
+
+    def selected_command(self) -> str:
+        return self._selected
+
+
+class DataLensTab(QWidget):
+    """A tab that hosts :class:`DataLens` and CRUD controls.
 
     Parameters
     ----------
@@ -56,7 +153,10 @@ class DirectoryLensTab(QWidget):
     def __init__(self, service: LDAPService | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._service: LDAPService | None = None
-        self._lens: DirectoryLens | None = None
+        self._lens: DataLens | None = None
+        self.rewrite_command: (
+            Callable[[str, str, Callable[[str], None], Callable[[str], None]], None] | None
+        ) = None
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         self.connection_status = QLabel("Connect to a directory to use Directory Commands.")
@@ -98,11 +198,11 @@ class DirectoryLensTab(QWidget):
         self.set_service(service)
 
     @property
-    def lens(self) -> DirectoryLens:
+    def lens(self) -> DataLens:
         if self._service is None:
             raise RuntimeError("Connect to a directory before using Directory Commands.")
         if self._lens is None:
-            self._lens = DirectoryLens(self._service, root_dn=self._service.profile.base_dn)
+            self._lens = DataLens(self._service, root_dn=self._service.profile.base_dn)
             self._lens.succeeded.connect(self._on_success)
             self._lens.failed.connect(self._on_failure)
             self._layout.insertWidget(0, self._lens)
@@ -151,8 +251,8 @@ class DirectoryLensTab(QWidget):
         if not ok:
             return
         try:
-            attributes: Dict[str, List[Any]] = json.loads(attrs_text)
-        except Exception as exc:  # pragma: no cover - defensive
+            attributes: dict[str, list[Any]] = json.loads(attrs_text)
+        except (ValueError, RecursionError) as exc:
             log_exception(exc)
             self.log.appendPlainText(f"Invalid attributes JSON: {exc}")
             return
@@ -168,8 +268,8 @@ class DirectoryLensTab(QWidget):
         if not ok:
             return
         try:
-            changes: Dict[str, List[tuple[str, Any]]] = json.loads(changes_text)
-        except Exception as exc:  # pragma: no cover - defensive
+            changes: dict[str, list[tuple[str, Any]]] = json.loads(changes_text)
+        except (ValueError, RecursionError) as exc:
             log_exception(exc)
             self.log.appendPlainText(f"Invalid changes JSON: {exc}")
             return
@@ -254,7 +354,7 @@ class DirectoryLensTab(QWidget):
         connected, which caused the test ``test_invalid_crud_command_logs_failure_without_request``
         to fail because it expected a *Command error* message even when the
         service was ``None``.  The updated logic attempts to parse the command
-        regardless of connection state and logs any exception that occurs.
+        regardless of connection state and logs expected command errors.
         """
         text = self.cmd_input.text().strip()
         if not text:
@@ -276,7 +376,9 @@ class DirectoryLensTab(QWidget):
                 return
         try:
             self._parse_and_execute(text)
-        except Exception as exc:  # pragma: no cover - defensive
+        except (
+            ValueError, RecursionError, LDAPOperationError, LDAPException, CertificateTrustError
+        ) as exc:
             log_exception(exc)
             self.log.appendPlainText(f"Command error: {exc}")
 
@@ -297,7 +399,6 @@ class DirectoryLensTab(QWidget):
         (ou) and password.  If any required information is missing the user is prompted for it.
         A confirmation dialog is shown before performing the operation.
         """
-        import json
         import re
 
         # Normalise whitespace and lowercase for verb detection
@@ -305,14 +406,12 @@ class DirectoryLensTab(QWidget):
         suggestion = self._unclear_crud_example(text)
         if suggestion is not None:
             verb, example = suggestion
-            self._offer_command_example(verb, example)
+            self._offer_command_example(verb, example, text)
             return
         self.log.appendPlainText(f"_parse_and_execute received: {text}")
         if lowered.startswith("create"):
             self._handle_create(text)
-        elif lowered.startswith("add "):
-            self._handle_update(text)
-        elif lowered.startswith(("update", "modify")):
+        elif lowered.startswith(("add ", "update", "modify")):
             self._handle_update(text)
         elif lowered.startswith("delete"):
             self._handle_delete(text)
@@ -326,6 +425,7 @@ class DirectoryLensTab(QWidget):
                 )
             else:
                 message = "I couldn't interpret that command. Try one of these examples:\n\n"
+            message = f"Original query:\n{text}\n\n{message}"
             message += (
                 "Create (prompts for password): create user Alex Smith in the people OU, "
                 "cn is alexsmith\n"
@@ -404,8 +504,10 @@ class DirectoryLensTab(QWidget):
                 return None
             return (
                 "update",
-                'update entry cn=alexsmith,ou=people,dc=example,dc=com '
-                'changes={"sn":[["replace",["Smith"]]]}',
+                (
+                    'update entry cn=alexsmith,ou=people,dc=example,dc=com '
+                    'changes={"sn":[["replace",["Smith"]]]}'
+                ),
             )
 
         if verb == "move" and re.fullmatch(
@@ -429,32 +531,19 @@ class DirectoryLensTab(QWidget):
         }
         return verb, examples.get(verb, "")
 
-    def _offer_command_example(self, verb: str, example: str) -> None:
-        dialog = QMessageBox(self)
-        dialog.setWindowTitle("Command needs clarification")
-        dialog.setIcon(QMessageBox.Icon.Information)
-        dialog.setText(f"I couldn't interpret that {verb} command.")
-        dialog.setInformativeText(
-            f"Copyable example:\n{example}\n\nReplace the current command with this example?"
-        )
-        dialog.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-            | Qt.TextInteractionFlag.TextSelectableByKeyboard
-        )
-        dialog.setStandardButtons(
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        dialog.setDefaultButton(QMessageBox.StandardButton.No)
-        if dialog.exec() == QMessageBox.StandardButton.Yes:
-            self.cmd_input.setText(example)
+    def _offer_command_example(self, verb: str, example: str, query: str) -> None:
+        dialog = CommandClarificationDialog(verb, example, query, self.rewrite_command, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.cmd_input.setText(dialog.selected_command())
             self.cmd_input.setFocus()
             self.cmd_input.selectAll()
+        dialog.deleteLater()
 
     # ---------------------------------------------------------------------
     # Helper methods for each verb
     # ---------------------------------------------------------------------
     def _handle_create(self, text: str) -> None:
-        """Parse a create command and call :meth:`DirectoryLens.create_entry`.
+        """Parse a create command and call :meth:`DataLens.create_entry`.
 
         Expected free-form examples:
         ``create user matt pollicove in the people OU, cn is mattp, password is @dmin123!``
@@ -666,7 +755,7 @@ class DirectoryLensTab(QWidget):
         """Return the DN for *identifier*.
 
         The method performs a search using the same filter logic as
-        :meth:`DirectoryLens.add_attribute_to_user`.  It raises ``ValueError``
+        :meth:`DataLens.add_attribute_to_user`.  It raises ``ValueError``
         if no user or multiple users match.
         """
         # Resolve identifiers using only universally supported attributes.

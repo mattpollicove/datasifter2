@@ -1,7 +1,7 @@
 import os
 
 from datasifter.directory.service import LDAPService
-from datasifter.ui.directory_lens_tab import DirectoryLensTab
+from datasifter.ui.data_lens_tab import DataLensTab
 
 
 class FakeProfile:
@@ -28,13 +28,13 @@ class FakeService(LDAPService):
 def test_delete_user_calls_service(qtbot, monkeypatch):
     """Verify that a delete command correctly invokes the LDAP service.
 
-    The test creates a :class:`DirectoryLensTab`, injects a fake service that
+    The test creates a :class:`DataLensTab`, injects a fake service that
     records delete calls, and then executes a natural‑language delete command.
     It asserts that the service was called with the expected DN and that the
     UI logged a success message.
     """
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    tab = DirectoryLensTab()
+    tab = DataLensTab()
     qtbot.addWidget(tab)
     fake_service = FakeService()
     tab.set_service(fake_service)

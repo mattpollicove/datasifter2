@@ -56,6 +56,10 @@ At planning time, the starting folder had no application code, test suite, or pr
 - [x] T015 [Plan:5.1] Add user-facing setup, profile, TLS/trust, model configuration, and packaging documentation; package the Phase 1 app as a standalone desktop application.
 - [x] T016 [Plan:5.2] Run the available automated test suite and build/package checks; document any live-directory validations that require external infrastructure.
 
+### Phase 1 follow-up
+
+- [x] T017 [Spec:4.1] Implement LDIF v1 validation, previewed full change-record import with ordered writes and read-only protection, and validated atomic export of the selected entry; document unsupported syntax and partial-import behavior.
+
 ## Requirement Mapping
 
 | Spec section | Plan items | Implementation evidence |
@@ -66,6 +70,7 @@ At planning time, the starting folder had no application code, test suite, or pr
 | §3.1–3.2 Phase 1 navigation/workspace | 2.1, 2.4 | PyQt6 window, DIT tree, workspace tabs |
 | §3.2 Protocol log | 2.1 | LDAP operation log console |
 | §4.1 LDAP CRUD, rename/move, password | 3.1–3.3 | LDAP operation services and guarded UI actions |
+| §4.1 LDIF | T017 | LDIF parser/serializer tests, confirmed import, and selected-entry export |
 | §4.3 Read-only safety | 3.3 | Central mutation guard and tests |
 | §5.1 Offline local AI and context scrubber | 4.1, 4.3 | llama.cpp adapter and privacy tests |
 | §5.2 Review, validation, confirmation | 4.2, 4.3 | Review UI, validator, preference tests |
@@ -93,11 +98,12 @@ tests/
 
 ## Implementation history
 
-The counts and build results below are historical milestones. Current source validation
-on 2026-11-02 passed **219 tests**; recent source changes are not yet validated in a fresh
-standalone build. Completed tasks mean implemented code, not production readiness.
+The counts and build results below are historical milestones. Full-suite validation before
+the LDIF refresh fix passed **308 tests** on 2026-11-15; the fix has focused UI/LDIF tests
+and targeted Ruff checks. The current source has not been validated in a fresh standalone
+build. Completed tasks mean implemented code, not production readiness.
 
-All 16 planned tasks are implemented. The Phase 1 follow-up adds active LDAP socket interruption across LDAP operations, sanitized decoded ldap3 request-dictionary logging where available (with summaries as a fallback), an LDAP filter syntax highlighter, a schema inspector with attribute syntax details, and streamed/cancellable local inference. Model selection records an operator-attested source and SHA-256 digest; inference refuses unapproved or changed model files. The standalone build at version 0.005 and its UI startup smoke test passed before the latest cancellation and logging follow-up. Latest validation passed 92 tests, Ruff, `compileall`, and `pip check`; the BOM generator validated and regenerated 204 components. External LDAP-server interoperability, clean-target TLS, real-model behavior, and macOS/Linux builds remain environment-dependent.
+All 16 original planned tasks are implemented, with LDIF support tracked as follow-up T017. Earlier Phase 1 follow-ups added active LDAP socket interruption across LDAP operations, sanitized decoded ldap3 request-dictionary logging where available (with summaries as a fallback), an LDAP filter syntax highlighter, a schema inspector with attribute syntax details, and streamed/cancellable local inference. Model selection records an operator-attested source and SHA-256 digest; inference refuses unapproved or changed model files. The standalone build at version 0.005 and its UI startup smoke test passed before later changes. A prior validation passed 92 tests, Ruff, `compileall`, and `pip check`; the BOM generator validated and regenerated 204 components. External LDAP-server interoperability, clean-target TLS, real-model behavior, and macOS/Linux builds remain environment-dependent.
 
 The approved profile usability follow-up adds editing of existing profiles, an explicitly labeled
 masked bind-password field, and separate network and authentication test buttons for saved profiles.

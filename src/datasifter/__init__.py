@@ -1,3 +1,3 @@
 """DataSifter 2.0 desktop client."""
 
-__version__ = "0.006"
+__version__ = "0.010"

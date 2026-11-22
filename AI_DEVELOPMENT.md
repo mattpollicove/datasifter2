@@ -25,6 +25,7 @@ The repository's [AI build prompts](./datasifter_prompt_AI.md) provide
 project-specific guidance for staged, verifiable AI-assisted work.
 
 This development practice is separate from DataSifter's optional user-facing
-AI feature, Directory Lens. Directory Lens uses a locally selected GGUF model
-through llama.cpp to draft LDAP search filters; see the [README](./README.md)
-and [privacy notice](./PRIVACY.md) for product behavior and data handling.
+AI feature, Data Lens. Data Lens uses a locally selected GGUF model
+through llama.cpp to produce validated search, proposed-mutation, or clarification
+intents; see the [README](./README.md) and [privacy notice](./PRIVACY.md) for product
+behavior and data handling.

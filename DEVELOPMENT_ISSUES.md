@@ -202,3 +202,57 @@ After:
 - **Resolution:** Parse attribute-first update requests, normalize the attribute alias, resolve the identifier, and replace the attribute with the value supplied in the prompt. A regression test verifies no follow-up dialogs are opened.
 
 - **Follow-up:** Also accept `update <attribute> for <user> to <value>` and confirm with a sentence that names the normalized attribute, identifier, and value.
+
+## Local Coding-Model Import Resolution Review
+
+- **Observation:** Local coding models have had difficulty resolving/importing the project's Python modules. In the checked development environment, Pylance's import inventory listed `datasifter` as unresolved even though the selected project `.venv` could import `datasifter` and resolve it to `src/datasifter`. The workspace config now adds `./src` to Pylance analysis paths.
+- **Environment note:** The local development-model environment associated with the reported issue was not available for verification during this review. The import discrepancy may be specific to that environment and is not confirmed as an application source defect.
+- **Current impact:** Not a release or runtime blocker based on the verified project-environment import and passing test suite. Do not change application imports, add shims, or modify `sys.path` to work around an unverified local coding-model environment.
+- **Review required:** Recheck import resolution when the affected local development models and their actual Python/editor environments are available. Capture the selected interpreter, exact failing command or diagnostic, traceback, and resolved module paths before deciding whether a source or environment change is needed.
+
+## Uninterpreted Command Feedback
+
+- **Problem:** When a natural-language directory command could not be interpreted, the error guidance did not repeat the command the user entered.
+- **Resolution:** Include the original query in the command guidance and in CRUD clarification dialogs, so users can compare their input with the suggested example.
+- **Verification:** Regression tests cover both generic unrecognized commands and CRUD commands that need clarification.
+
+## Directory Lens Renamed to Data Lens with Target Session Commands
+
+- **Change:** Directory Lens is now Data Lens. `ui/directory_lens.py`, `ui/directory_lens_tab.py`, and `tests/test_directory_lens.py` became `ui/data_lens.py`, `ui/data_lens_tab.py`, and `tests/test_data_lens.py`; `DirectoryLens`/`DirectoryLensTab` became `DataLens`/`DataLensTab`. Earlier entries in this file keep the names in use when they were written. The "Directory Commands" and "Directory Workbench" labels are unchanged.
+- **Change:** Data Lens accepts typed session commands (`connect to`/`switch to <profile>`, `disconnect`, `list targets`, `current target`), parsed in `session_commands.py` against the whole request so searches such as `list profiles in ou=People` still reach filter generation.
+- **Supersedes:** "Directory Tools Disabled Until Connected" disabled the whole lens panel until a connection succeeded. The panel now stays usable so session commands can run while disconnected; the Run button instead refuses searches and directory commands until a session is established, including during and after an incomplete connection attempt.
+- **Lesson learned:** A failed connection attempt leaves `_active_profile` set with `_connecting` still true. Gate on both, not on `_active_profile` alone, before running anything against the directory.
+
+## Data Lens Engine Phase 1
+
+- **Change:** Added the UI-independent `datasifter.datalens` package: Pydantic models, DN helpers, and `StandardLdapAdapter` / `ActiveDirectoryAdapter` with dry-run previews and a confirmation gate. The adapters call `LDAPService` rather than opening their own connections. `LDAPService.search` gained `max_entries` so a size-limited search stops paging early. Pydantic is a new runtime dependency.
+- **Finding:** ldap3's mock directory returns the base entry itself in a one-level search and enforces neither "parent must exist" nor "no delete of a non-leaf". The children probe therefore asks for two entries and drops the entry itself. Do not rely on the mock to prove directory rules; the live tests do that.
+- **Finding:** Active Directory's schema marks `instanceType`, `nTSecurityDescriptor`, `objectCategory`, `objectSid`, `sAMAccountName` and `groupType` as required, but the domain controller supplies them. Treating the schema as authoritative would block every create, so the AD adapter excludes them. Verified against the test domain.
+- **Limitation:** The test domain controller has no TLS certificate (StartTLS answers "Error initializing SSL/TLS", port 636 resets). Writing `unicodePwd` is covered by mock tests only until it has one; set `ldaps_port` in `tests/live_ad.local.json` to enable the live test.
+
+## Modal Dialog Stalled an Unattended Test Run
+
+- **Problem:** `test_startup_and_disconnected_lens_do_not_contact_ldap` submits an incomplete delete command, which opens the modal "Command needs clarification" dialog. Nothing in the test closed it, so the suite waited for someone to dismiss the dialog by hand.
+- **Resolution:** The test now replaces `CommandClarificationDialog.exec` with an immediate rejection.
+- **Lesson learned:** A test that can reach a modal dialog must patch its `exec`. Run the full suite with `-o faulthandler_timeout=120` when a run stalls; the dump names the blocking call.
+
+## Data Lens Engine Phase 2
+
+- **Change:** Added `datalens.aliases` (backend-aware concept registry), `datalens.resolver` (terms to attributes, names to entries, requests to plans or clarification questions) and `datalens.schema`. The adapters gained group and container filters, account-state filters and changes, `known_attributes`, and `execute(plan)`.
+- **Problem found in existing code:** Any search whose filter contained an extensible match, such as Active Directory's `(userAccountControl:1.2.840.113556.1.4.803:=2)` or the `(ou:dn:=People)` location match, failed with "Assertion must contain a valid LDAP comparison operator". ldap3 records such assertions in its own multi-line `ExtensibleMatch:` form, and the protocol log's redaction validated that text as RFC 4515 and raised inside the logging step.
+- **Resolution:** Redaction no longer raises on text it cannot parse; the log then shows the filter as the caller wrote it, with values redacted. A regression test covers the ldap3 form.
+- **Lesson learned:** Logging must never be able to fail the operation it describes.
+- **Finding:** A server defines only some of the account-status attributes of the various LDAP server families, and ldap3 refuses to request an attribute the schema does not define. Lists such as `account_status_attributes` must be filtered through `known_attributes` first.
+- **Finding:** With `max_options` matches fetched, one returned entry is unique only when the search was not truncated. The first version treated a truncated single result as the answer; a test with `max_options=1` caught it.
+- **Finding:** ldap3's mock ignores the new RDN of a ModifyDN that also names a new superior. Rename-and-move in one operation is verified by the live tests instead.
+
+## Data Lens Engine Phase 4
+
+- **Change:** Mutation proposals require explicit review and confirmation; the reviewed preview
+  is checked again immediately before submission. A separate local JSON-lines audit records
+  metadata only. LDAP cannot make the preview and write atomic, and recursive deletion can
+  partially complete.
+- **Lab update:** The AD lab now presents a certificate on LDAPS port 636. Its local test
+  configuration still disables the port, and the fixture's hostname-mapping closure fails to
+  resolve the certificate name. A temporary in-process port and DNS override allowed the AD
+  LDAPS tests to run without altering the local configuration.

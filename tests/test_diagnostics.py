@@ -190,15 +190,16 @@ def test_nlp_diagnostics_persist_only_outcomes(qtbot, tmp_path):
 
 
 def test_invalid_crud_command_logs_failure_without_request(qtbot, tmp_path):
-    from datasifter.ui.directory_lens_tab import DirectoryLensTab
+    from datasifter.ui.data_lens_tab import DataLensTab
 
     session = DiagnosticLog(tmp_path)
-    tab = DirectoryLensTab()
+    tab = DataLensTab()
     qtbot.addWidget(tab)
     try:
         tab.cmd_input.setText("unrecognized command with private-password")
         tab._execute_command()
         assert "Command error" in tab.log.toPlainText()
+        assert "Original query:\nunrecognized command with private-password" in tab.log.toPlainText()
     finally:
         tab.close()
         session.close()
