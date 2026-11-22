@@ -71,7 +71,8 @@ def build_live_service(tmp_path, monkeypatch) -> Callable[..., LDAPService]:
     def build(
         settings: dict[str, Any], transport: str = "plain", read_only: bool = False
     ) -> LDAPService:
-        host = settings["host"]
+        address = settings["host"]
+        host = address
         server_name = settings.get("tls_server_name")
         if transport != "plain" and server_name:
             # The certificate names the server, not its address: resolve that name
@@ -81,7 +82,7 @@ def build_live_service(tmp_path, monkeypatch) -> Callable[..., LDAPService]:
                 socket,
                 "getaddrinfo",
                 lambda name, *args, **kwargs: resolve(
-                    host if name == server_name else name, *args, **kwargs
+                    address if name == server_name else name, *args, **kwargs
                 ),
             )
             host = server_name

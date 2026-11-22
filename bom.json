@@ -1,10 +1,10 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:078fe917-4628-4205-8db7-8b3daebaceb4",
+  "serialNumber": "urn:uuid:044f364a-3cc7-4bf3-94d5-6cf18f5a3a1e",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-22T18:30:17.017773+00:00",
+    "timestamp": "2026-11-22T18:33:24.075772+00:00",
     "component": {
       "type": "application",
       "bom-ref": "datasifter:0.010",
@@ -1947,7 +1947,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "980c2fdfa6374fca89048b46d1ba8a9d2fc425e218805675abc1cca85f95445a"
+          "content": "5d402b2e02ea4c9d8a8cabdb288820f84785039773733c89d8bcf088bba73a2f"
         }
       ],
       "properties": [
@@ -2236,7 +2236,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9093fd9a5b1a2cd0c7fac205434cfa14f0c7d8540c1dd8f199d48e33866440c3"
+          "content": "f446a94249954345abed8103beb41b989d071b2f8af91409bc3229c9726df78c"
         }
       ],
       "properties": [

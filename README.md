@@ -59,8 +59,8 @@ not mean every operation has been verified against a live server or every listed
 ### Testing evidence and current limitations
 
 - Most recent full-suite validation: **536 passed, 1 skipped** on Windows on 2026-11-22.
-  The AD password-over-LDAPS test is skipped by the local configuration; a separate run
-  with temporary port and hostname overrides passed against the lab's LDAPS endpoint.
+  That run skipped the AD password-over-LDAPS test because its port was not configured;
+  a subsequent targeted run passed against the lab's LDAPS endpoint.
 - Automated coverage includes configuration, LDAP service behavior, filters, certificates,
   workers, Qt UI interactions, model approval/download safeguards, and BOM generation.
   Model inference tests use fakes where appropriate; passing them is not a real-model benchmark.

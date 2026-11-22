@@ -496,6 +496,36 @@ def test_network_test_surfaces_connection_failure(monkeypatch):
         service.test_network()
 
 
+def test_live_tls_fixture_resolves_certificate_name_to_target_address(
+    build_live_service, monkeypatch
+):
+    from datasifter.security.certificates import CertificateTrustStore
+
+    calls = []
+
+    def resolve(host, *_args, **_kwargs):
+        calls.append(host)
+        return []
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
+    monkeypatch.setattr(LDAPService, "inspect_server_certificate", lambda _profile: b"certificate")
+    monkeypatch.setattr(CertificateTrustStore, "accept_tofu", lambda *_args: None)
+    settings = {
+        "host": "192.0.2.1",
+        "tls_server_name": "directory.example",
+        "ldaps_port": 636,
+        "bind_dn": "cn=test",
+        "base_dn": "dc=test",
+        "password": "test-only",
+    }
+
+    service = build_live_service(settings, "ldaps")
+    socket.getaddrinfo("directory.example", 636)
+    socket.getaddrinfo("other.example", 636)
+    assert service.profile.host == "directory.example"
+    assert calls == ["192.0.2.1", "other.example"]
+
+
 @pytest.mark.parametrize("authentication,password", [("anonymous", None), ("simple", "secret")])
 def test_authentication_test_binds_without_search(monkeypatch, authentication, password):
     profile = DirectoryProfile(

@@ -253,6 +253,5 @@ After:
   metadata only. LDAP cannot make the preview and write atomic, and recursive deletion can
   partially complete.
 - **Lab update:** The AD lab now presents a certificate on LDAPS port 636. Its local test
-  configuration still disables the port, and the fixture's hostname-mapping closure fails to
-  resolve the certificate name. A temporary in-process port and DNS override allowed the AD
-  LDAPS tests to run without altering the local configuration.
+  configuration can enable that port. The live test fixture now captures the target address
+  separately from the TLS hostname, so the certificate name resolves to the configured target.
